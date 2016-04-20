@@ -6,8 +6,11 @@ That is, when a word is repeated within a small frame of one another,
 the LZSS algorithm replaces the second occurrence of that word with a
 reference to the first word.
 For example, we have the phrase:
+
     yiwen song is a yiwen song.
+
 We can compress to:
+
     yiwen song is a (16,10).
 
 ## Small Implementation details
