@@ -1,122 +1,82 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 
 #include "lzss_help.h"
+#include "common.h"
 
-#define LARGE (1024 * 1024)
-
-void human_readable_compression(unsigned char *comp, size_t len)
+void dummy(char *buf,size_t sz)
 {
-
-  char p_buf[ LARGE ];
-
-  off_t i = 0;
-  off_t b = 0;
-  char flag;
-  char tmp;
-  char buf[4];
-  uint16_t *uintbuf = (uint16_t*) buf;
-
-  for(; b / 8 < len ;)
-  {
-    flag = comp[b/8] >> (7-b%8);
-    fprintf(stderr,"FLAG 0x%x b %d\n",flag,(int)b);
-    if( !flag )
-    {
-      b++;
-      /* write the next character to dst */
-      p_buf[i] = comp[ b/8 ] <<  b%8;
-      p_buf[i] |= comp[ b/8 + 1] >> (8-b%8);
-      b += 8;
-      i++;
-    }
-    else
-    {
-      for(int t=0;t<4;t++)
-      {
-        buf[t] = comp[ b/8 + t ] << (b%8);
-        buf[t] |= comp[ b/8 + t + 1 ] >> (8-(b%8));
-      }
-      p_buf[i] = '(';
-      i++;
-      int len = sprintf(p_buf + i,"%d",(int16_t) uintbuf[0]);
-      i += len;
-      p_buf[i] = ',';
-      i++;
-      len = sprintf(p_buf + i,"%d",uintbuf[1]);
-      i += len;
-      p_buf[i] = ')';
-      i++;
-      b += 32;
-    }
-  }
-
-  p_buf[i] = '\0';
-
-  fprintf(stderr,"HUMAN READABLE COMPRESSED:\n%s\n",p_buf);
-
+  char k;
+  for(int i=0;i<sz;i++)
+    k = buf[i];
+  return;
 }
 
-void char_dump_bin(unsigned char c)
+int main(int argc, char **argv)
 {
-  unsigned char buf[9];
-  for(int i=0;i<8;i++)
+  char *savename = read_string( argc, argv, "-o", NULL );
+  char *compname = read_string( argc, argv, "-c", NULL );
+  char *dcmpname = read_string( argc, argv, "-d", NULL );
+
+  if( find_option( argc, argv, "-h" ) >= 0 ||
+      savename == NULL ||
+      (compname == NULL && dcmpname == NULL) ||
+      (compname != NULL && dcmpname != NULL) )
   {
-    buf[i] = '0' + ((c >> (7-i)) & 0x1);
+    printf( "Options:\n" );
+    printf( "-h to see this help\n" );
+    printf( "-c <filename> compression input file\n" );
+    printf( "-d <filename> decompression input file\n" );
+    printf( "-o <filename> output file\n" );
+    printf( "-t print timings\n" );
+    return 0;
   }
-  buf[8] = '\0';
-  fprintf(stderr,"%s ",buf);
-}
 
-#define testsize 40
+  double time;
+  int t = (find_option( argc, argv, "-t" ) >= 0);
 
-int main()
-{
+  FILE *fsave = fopen(savename,"w");
+  FILE *input = compname ? fopen(compname,"r") : fopen(dcmpname,"r");
 
+  int64_t fsize = file_size( ((compname)?compname:dcmpname) );
 
-  char cc = '\xff';
-  unsigned char uu = '\xff';
+  unsigned char *buf = (unsigned char*) malloc(fsize * sizeof(unsigned char));
 
-  char_dump_bin(cc); fprintf(stderr,"\n");
-  char_dump_bin(cc >> 1);fprintf(stderr,"\n");
-  char_dump_bin(uu);fprintf(stderr,"\n");
-  char_dump_bin(uu >> 1);fprintf(stderr,"\n\n\n\n\n\n\n\n");
+  int64_t out_size;
 
-
-
-
-
-
-
-  char *text = (char*) malloc( testsize * sizeof(char) );
-  for(int i=0;i<testsize;i++)
+  if(compname)
   {
-    text[i] = (i<testsize/2) ? 'c' : 'c';
+    fwrite((void*)&fsize,sizeof(int64_t),1,fsave);
+    out_size = fsize;
   }
-  text[testsize-1] = '\0';
-
-  char *buf = (char*) malloc( strlen(text) * sizeof(char) );
-  size_t comp_size = compress((char*)text,strlen(text),buf);
-
-  for(int i=0;i<comp_size;i++)
+  else
   {
-    char_dump_bin(buf[i]);
+    fread((void*)&out_size,sizeof(int64_t),1,input);
   }
-  fprintf(stderr,"\n\n\n\n\n\n\n\n");
+  unsigned char *out = (unsigned char*) malloc( out_size * sizeof(unsigned char) );
 
-  human_readable_compression(buf,comp_size);
-
-  char *buf2 = (char*) malloc( strlen(text) * sizeof(char) );
-  size_t decomp_size = decompress((char*) buf, comp_size, buf2);
-
-  fprintf(stderr,"comp size: %d, decomp size: %d\n",(int)comp_size,(int)decomp_size);
-
-  int cmp = memcmp(text,buf2,strlen(text) * sizeof(char));
-
-  fprintf(stderr,"ORIGINAL:\n%s\n",text);
-  fprintf(stderr,"DCOMPRSS:\n%s\n",buf2);
-
-  fprintf(stderr,"COMPARE: %d\n",cmp);
+  int64_t cur_size = fread(buf,sizeof(unsigned char),fsize,input);
+  if( compname )
+  {
+    out_size = compress(buf,cur_size,out);
+    fprintf(stderr,"wtf dummy\n"); fflush(0);
+    dummy(out,out_size);
+    fprintf(stderr,"wtf human\n"); fflush(0);
+    human_readable_compression(out,out_size);
+    fprintf(stderr,"decompress\n"); fflush(0);
+    char buf2[ 1500 ];
+    decompress(out,out_size,buf2);
+    fprintf(stderr,"%s\n",buf2);
+  }
+  else
+  {
+    fprintf(stderr,"wtf\n"); fflush(0);
+    human_readable_compression(buf,cur_size);
+    out_size = decompress(buf,cur_size,out);
+  }
+  fwrite(out,sizeof(unsigned char),out_size,fsave);
+  
   return 0;
 }

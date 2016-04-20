@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+#define LARGE (1024 * 1024)
+
 typedef struct match match_t;
 struct match
 {
@@ -10,10 +12,11 @@ struct match
   uint16_t l;
 };
 
-size_t compress(char* input, size_t input_len, char* dst);
-size_t decompress(char* input, size_t input_len, char* dst);
+uint64_t compress(char* input, uint64_t input_len, char* dst);
+uint64_t decompress(char* input, uint64_t input_len, char* dst);
 
 
 
 
 void char_dump_bin(unsigned char c);
+void human_readable_compression(unsigned char *comp, uint64_t len);
