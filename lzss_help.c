@@ -46,141 +46,133 @@ void window_match(char* word, int64_t back_max, int64_t fwd_max, match_t* dst)
   dst->l = (uint16_t) best;
 }
 
-/* Pass in last pointer WITH INFORMATION IN IT */
-/* buf_to_add should be memory aligned. If not, it should be zero appended */
-void write_unaligned(unsigned char* last, uint64_t buf_bit_size, unsigned char* buf_to_add, uint64_t add_size)
-{
-  unsigned char l = last[0];
-  uint64_t filled = buf_bit_size % CHAR_BIT;
-  uint64_t space = CHAR_BIT - filled;
+#define PUT_BIT(bit,idx) ((bit) << ((idx)%8))
+#define IDX_BY_BIT(arr,idx) ((arr)[(idx)/8])
+#define GET_BIT(arr,idx) ((IDX_BY_BIT(arr,idx) >> ((idx)%8)) & 0x1)
 
-  unsigned char *buf = last;
-  for(int i=0;i<add_size;i++)
-  {
-    buf[i] = (unsigned char) 0;
-    buf[i] = buf[i] | l;
-    buf[i] = buf[i] | (buf_to_add[i] >> filled);
-    l = buf_to_add[i] << space;
-  }
-  buf[add_size] = l;
-}
-
-uint64_t compress(char* input, uint64_t input_len, char* dst)
+/* Make sure flags is zeroed out before passed in */
+uint64_t compress(uint8_t* input, uint64_t input_len, uint8_t* dst, uint8_t* flags)
 {
   match_t match;
   int64_t i=0;
   int64_t w=0;
-  
-  fprintf(stderr,"\n\nSTARTING COMPRESSION\n\n");
+  int64_t b=0;
 
   for(;i<input_len;)
   {
-    char *curr = input + i;
+    uint8_t *curr = input + i;
     int64_t window_offset = max(input-curr,i-WINDOW);
     window_match(curr, window_offset, min(input_len - i, 2*WINDOW), &match);
     
     if( match.l < MIN_MATCH )
     {
       /* add 0 bit and the byte */
-      for(int j=0;j<max(1,match.d);j++)
+      for(int j=0;j<max(1,match.l);j++)
       {
-        w++;
-        char* last = dst + w/CHAR_BIT;
-        fprintf(stderr,"%c",curr[j]);
-        write_unaligned( (unsigned char*) last, w, (unsigned char*) curr+j, 1 );
-        w += CHAR_BIT;
-        i++;
+        IDX_BY_BIT(flags,b+j) |= PUT_BIT(0,b+j);
+        dst[w+j] = input[i+j];
       }
-
-      /*
-      w++;
-      char* last = dst + w/CHAR_BIT;
-      write_unaligned( (unsigned char*) last, w, (unsigned char*) curr, 1 );
-      w += CHAR_BIT;
-      i++;
-      */
-    }
-    else
-    {
-      /* add 1 bit, d, and l */
-      uint16_t buf[2];
-      // buf[0] = 1 << 15 | match.l;
-      buf[0] = match.d;
-      buf[1] = match.l;
-
-      fprintf(stderr,"(%x,%x)",match.d,match.l);
-
-      /* write to dst + w */
-      // memcpy(dst + i, buf, 2 * sizeof(uint16_t));
-      char* last = dst + w/CHAR_BIT;
-      write_unaligned( (unsigned char*) last, w, (unsigned char*) buf, 2 * sizeof(uint16_t) );
-      w += 2 * sizeof(uint16_t) * CHAR_BIT;
+      b += match.l;
+      w += match.l;
       i += match.l;
     }
+    else
+    {
+      /* match.d is displacement */
+      /* match.l is length of match */
+      IDX_BY_BIT(flags,w) |= PUT_BIT(1,w);
+      memcpy(dst,match,sizeof(match_t));
+      i += match.l;
+      w += 4;
+      b++;
+    }
   }
 
-  // fprintf(stderr,"\n\n\n%s\n\n\n???\n",input);
-
-  human_readable_compression(dst,(w+CHAR_BIT)/CHAR_BIT);
-
-
-  fprintf(stderr,"\n\nDONE WITH COMPRESSION\n\n\n");
-
-  return (w+CHAR_BIT)/CHAR_BIT;
+  return b; /* dst length can be calculated from flags and length of flags */
 }
 
-uint64_t decompress(char* input, uint64_t input_len, char* dst)
+uint64_t decompress(uint8_t* input, uint8_t* flags, uint64_t input_len, uint8_t* dst)
 {
-  if(1) return 0;
+  int64_t b=0;
+  int64_t i=0;
+  int64_t w=0;
 
-  int64_t i = 0;
-  int64_t b = 0;
-  char flag;
-  char tmp;
-  unsigned char buf[4];
-  uint16_t *uintbuf = (uint16_t*) buf;
+  register uint8_t *curr;
+  register uint8_t bit;
+  match_t *match;
+  int16_t offset;
+  uint16_t matchlen;
 
-  int16_t d;
-  uint16_t l;
-
-  for(; b / CHAR_BIT < input_len-1 ;)
+  for(;i<input_len;)
   {
-    flag = (input[b/CHAR_BIT] >> ((CHAR_BIT-1)-(b%CHAR_BIT))) & 0x1;
-    if( !flag )
+    curr = input + i;
+    bit = GET_BIT(flags,b);
+    
+    if(!bit)
     {
-      b++;
-      /* write the next character to dst */
-      dst[i] = ((unsigned char*) input)[ b/CHAR_BIT ] <<  (b%CHAR_BIT);
-      dst[i] |= ((unsigned char*) input)[ b/CHAR_BIT + 1] >> (CHAR_BIT-b%CHAR_BIT);
-      b += CHAR_BIT;
-      i++;
+      dst[w] = input[i];
+      w++; i++; b++;
     }
     else
     {
-      for(int t=0;t<4;t++)
+      match = (match_t*) curr;
+      matchlen = match->l;
+      offset = match->d;
+      for(int j=0;j<matchlen;j++)
       {
-        buf[t] = ((unsigned char) input[ b/CHAR_BIT + t ]) << (b%CHAR_BIT);
-        buf[t] |= ((unsigned char) input[ b/CHAR_BIT + t + 1 ]) >> (CHAR_BIT-(b%CHAR_BIT));
+        dst[w + j] = dst[w + j + offset];
       }
-
-      d = (int16_t) uintbuf[0];
-      l = uintbuf[1];
-
-      // fprintf(stderr,"d: %d, l: %d\n",d,l);
-      // fprintf(stderr,"d: %d, l: %d\n",(int16_t) uintbuf[0], uintbuf[1]);
-
-      for(int j=0;j<l;j++)
-      {
-        dst[i + j] = dst[i + j + d];
-      }
-
-      i += l;
-      b += 2 * sizeof(uint16_t) * 8;
+      w += matchlen;
+      i += 4;
+      b++;
     }
   }
 
-  return (uint64_t) i;
+  return w;
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/*
+###################################################################################
+###################################################################################
+##                                                                               ##
+##                                                                               ##
+##            LOL                               THIS IS UNUSED BELOW             ##
+##                                                                               ##
+##                                                                               ##
+###################################################################################
+###################################################################################
+*/
+
+
+
+
+
+
+
+
+
+
+
+
 
 #define BIT_IDX(arr,b) (*(arr + (b/CHAR_BIT)))
 #define TOP_NUM_BITS(b) (b%CHAR_BIT)
@@ -305,3 +297,23 @@ void char_dump_bin(unsigned char c)
 
 
 
+
+/* Pass in last pointer WITH INFORMATION IN IT */
+/* buf_to_add should be memory aligned. If not, it should be zero appended */
+/* why the fuck did I try this */
+void write_unaligned(unsigned char* last, uint64_t buf_bit_size, unsigned char* buf_to_add, uint64_t add_size)
+{
+  unsigned char l = last[0];
+  uint64_t filled = buf_bit_size % CHAR_BIT;
+  uint64_t space = CHAR_BIT - filled;
+
+  unsigned char *buf = last;
+  for(int i=0;i<add_size;i++)
+  {
+    buf[i] = (unsigned char) 0;
+    buf[i] = buf[i] | l;
+    buf[i] = buf[i] | (buf_to_add[i] >> filled);
+    l = buf_to_add[i] << space;
+  }
+  buf[add_size] = l;
+}
