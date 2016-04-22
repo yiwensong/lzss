@@ -11,8 +11,8 @@
 typedef struct match match_t;
 struct match
 {
-  int16_t  d;
-  uint16_t l;
+  uint16_t d;
+  uint8_t l;
 };
 
 typedef struct compressed compressed_t;

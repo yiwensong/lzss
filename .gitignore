@@ -3,3 +3,4 @@
 lzss
 lzss-gpu
 err
+*.exe*

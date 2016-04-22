@@ -1,6 +1,6 @@
 CC = gcc
 NVCC = nvcc
-CFLAGS = --std=gnu99 # -O3 
+CFLAGS = --std=gnu99 -O3 
 CUFLAGS = -O3 -arch=sm_35 --std=gnu99
 LIBS = -lm
 
@@ -22,9 +22,20 @@ lzss_gpu: lzss_gpu.ou lzss_gpu_help.ou common.ou
 	$(NVCC) -c -o $@ $(CFLAGS) $(LIBS) $<
 
 check :		clean lzss
-	./lzss -c EXAMPLE -o COMP 2> CERR > COUT
-	./lzss -d COMP -o DECOMP 2> DERR > DOUT
+	./lzss -t -c EXAMPLE -o COMP 2> CERR > COUT
+	./lzss -t -c EXAMPLE2 -o COMP2 2> CERR > COUT
+	./lzss -t -c EXAMPLE3 -o COMP3 2> CERR > COUT
+	./lzss -t -c EXAMPLE4 -o COMP4 2> CERR > COUT
+	./lzss -t -d COMP -o DECOMP 2> DERR > DOUT
+	./lzss -t -d COMP2 -o DECOMP2 2> DERR > DOUT
+	./lzss -t -d COMP3 -o DECOMP3 2> DERR > DOUT
+	./lzss -t -d COMP4 -o DECOMP4 2> DERR > DOUT
+	diff DECOMP EXAMPLE
+	diff DECOMP2 EXAMPLE2
+	diff DECOMP3 EXAMPLE3
+	diff DECOMP4 EXAMPLE4
 
 clean :
 	rm -rf $(TARGETS)
 	rm -rf $(OBJECTS)
+	rm -rf test/*

@@ -29,14 +29,24 @@ int main(int argc, char **argv)
   double time;
   int t = (find_option( argc, argv, "-t" ) >= 0);
 
-  FILE *fsave = fopen(savename,"w");
   FILE *input = compname ? fopen(compname,"r") : fopen(dcmpname,"r");
+  if(!input)
+  {
+    return 0;
+  }
+  FILE *fsave = fopen(savename,"w");
 
 
+  if(t)
+  {
+    time = read_timer();
+  }
+
+  uint64_t fsize;
   /* Preprocessing */
   if(compname)
   {
-    uint64_t fsize = file_size(compname);
+    fsize = file_size(compname);
     decomp_t *decomp = (decomp_t*) malloc(fsize*sizeof(uint8_t));
     size_t read = fread(decomp->content, fsize, sizeof(uint8_t),input);
     decomp->content_len = fsize;
@@ -45,11 +55,16 @@ int main(int argc, char **argv)
     uint64_t total_len = comp->content_len + BITS_TO_CHARS(comp->flag_bits);
     size_t wrote = fwrite(comp, sizeof(uint8_t), sizeof(compressed_t) + total_len * sizeof(uint8_t), fsave);
 
-    fprintf(stderr,"\nwrote %d bytes\n",wrote);
+    if(t)
+    {
+      fprintf(stdout,"Mode: compress\n");
+      fprintf(stdout,"Compression ratio: %lf\n", (1.0*fsize)/(1.0*wrote + 1.0e-7));
+      fprintf(stdout,"Deflation: %.0lf%%\n", (1.0*wrote)/(1.0*fsize + 1.0e-7)*100);
+    }
   }
   else
   {
-    uint64_t fsize = file_size(dcmpname);
+    fsize = file_size(dcmpname);
     compressed_t *comp = (compressed_t*) malloc(fsize*sizeof(uint8_t));
     size_t read = fread(comp, fsize, sizeof(uint8_t),input);
 
@@ -57,8 +72,14 @@ int main(int argc, char **argv)
     uint64_t total_len = decomp->content_len;
     size_t wrote = fwrite(decomp->content, sizeof(uint8_t), total_len * sizeof(uint8_t), fsave);
 
-    fprintf(stderr,"input size %d bytes\n",comp->content_len);
-    fprintf(stderr,"wrote %d bytes\n",wrote);
+    if(t) fprintf(stdout,"Mode: decompress\n");
+  }
+
+  if(t)
+  {
+    time = read_timer() - time;
+    fprintf(stdout,"Input Size: %ld\n",fsize);
+    fprintf(stdout,"Time elapsed: %lf\n\n\n",time);
   }
   
   return 0;
