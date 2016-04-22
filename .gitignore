@@ -2,6 +2,7 @@
 *.o
 lzss
 lzss-gpu
+ref
 err
 *.exe*
 test/*
