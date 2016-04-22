@@ -14,7 +14,7 @@
 #define min(x,y) (((x) < (y)) ? (x) : (y))
 #define max(x,y) (((x) < (y)) ? (y) : (x))
 
-uint8_t match_len(char* old, char* fwd, uint16_t fwd_max)
+uint8_t match_len(uint8_t* old, uint8_t* fwd, uint16_t fwd_max)
 {
   uint8_t i;
   for(i=0;i<min(fwd_max,MAX_MATCH);i++)
@@ -27,14 +27,14 @@ uint8_t match_len(char* old, char* fwd, uint16_t fwd_max)
   return i;
 }
 
-void window_match(char* word, uint16_t back_max, uint16_t fwd_max, match_t* dst)
+void window_match(uint8_t* word, uint16_t back_max, uint16_t fwd_max, match_t* dst)
 {
   uint8_t best = 0;
   uint16_t offset = 0;
 
   for(uint16_t i=1;i<back_max;i++)
   {
-    char* tmp = word - i;
+    uint8_t* tmp = word - i;
     uint8_t curr = match_len(tmp,word,fwd_max+i);
     if(curr > best)
     {

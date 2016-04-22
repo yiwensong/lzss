@@ -1,7 +1,7 @@
 CC = gcc
 NVCC = nvcc
-CFLAGS = --std=gnu99 -O3 
-CUFLAGS = -O3 -arch=sm_35 --std=gnu99
+CFLAGS = --std=gnu99 -O3 -fgcse-sm -fgcse-las
+CUFLAGS = -Ofast -arch=sm_35 --std=gnu99
 LIBS = -lm
 
 TARGETS = lzss ref # lzss_gpu
@@ -12,7 +12,7 @@ all: $(TARGETS)
 lzss: lzss_help.o lzss.o common.o
 	$(CC) -o $@ $(CFLAGS) $(LIBS) $^
 
-ref: ref.c
+ref: ref.o common.o
 	$(CC) -o $@ $(CFLAGS) $(LIBS) $^
 
 lzss_gpu: lzss_gpu.ou lzss_gpu_help.ou common.ou
@@ -24,7 +24,7 @@ lzss_gpu: lzss_gpu.ou lzss_gpu_help.ou common.ou
 %.ou : %.cu
 	$(NVCC) -c -o $@ $(CFLAGS) $(LIBS) $<
 
-check :		clean lzss
+check :		clean lzss ref
 	./check.sh
 
 clean :

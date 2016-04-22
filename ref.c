@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "common.h"
+
 #define EI 11  /* typically 10..13 */
 #define EJ  4  /* typically 4..5 */
 #define P   1  /* If match length <= P then output one character */
@@ -157,6 +159,8 @@ int main(int argc, char *argv[])
 {
     int enc;
     char *s;
+
+    double t = read_timer();
     
     if (argc != 4) {
         printf("Usage: lzss e/d infile outfile\n\te = encode\td = decode\n");
@@ -176,5 +180,7 @@ int main(int argc, char *argv[])
     }
     if (enc) encode();  else decode();
     fclose(infile);  fclose(outfile);
+
+    fprintf(stderr,"Time elapsed: %lx\n",(read_timer()-t));
     return 0;
 }

@@ -1,13 +1,16 @@
 #!/bin/bash
-if [!-d ./test]; then
+if [ ! -d "./test" ];
+then
   mkdir -p ./test;
 fi;
 
-for i in `seq 1 10`;
+for i in $( /usr/bin/ls examples );
 do
+  echo -e '\n\n\n'
   echo $i
-  ./lzss -t -c examples/EXAMPLE$i -o test/COMP$i
-  ./ref e examples/EXAMPLE$i test/ref$i
-  ./lzss -t -d test/COMP$i -o test/DECOMP$i
-  diff examples/EXAMPLE$i test/DECOMP$i
+  echo -e ''
+  ./lzss -t -c examples/$i -o test/COMP.$i
+  ./ref e examples/$i test/ref.$i
+  ./lzss -t -d test/COMP.$i -o test/DECOMP.$i
+  diff examples/$i test/DECOMP.$i
 done

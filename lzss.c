@@ -78,7 +78,7 @@ int main(int argc, char **argv)
   if(t)
   {
     time = read_timer() - time;
-    fprintf(stdout,"Input Size: %ld\n",fsize);
+    fprintf(stdout,"Input Size: %ld\n",(long int) fsize);
     fprintf(stdout,"Time elapsed: %lf\n\n\n",time);
   }
   
