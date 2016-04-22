@@ -1,4 +1,8 @@
 #!/bin/bash
+if [!-d ./test]; then
+  mkdir -p ./test;
+fi;
+
 for i in `seq 1 10`;
 do
   echo $i
