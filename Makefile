@@ -1,6 +1,6 @@
 CC = gcc
 NVCC = nvcc
-CFLAGS = --std=gnu99 -O3 -fgcse-sm -fgcse-las
+CFLAGS = --std=gnu99 -Ofast -fgcse-sm -fgcse-las
 CUFLAGS = -Ofast -arch=sm_35 --std=gnu99
 LIBS = -lm
 

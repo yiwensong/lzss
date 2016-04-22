@@ -50,6 +50,10 @@ int main(int argc, char **argv)
     decomp_t *decomp = (decomp_t*) malloc(fsize*sizeof(uint8_t));
     size_t read = fread(decomp->content, fsize, sizeof(uint8_t),input);
     decomp->content_len = fsize;
+    if(t)
+    {
+      fprintf(stdout,"Read time: %lf\n",(read_timer()-time));
+    }
 
     compressed_t *comp = lzss_compress(decomp);
     uint64_t total_len = comp->content_len + BITS_TO_CHARS(comp->flag_bits);

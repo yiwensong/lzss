@@ -43,9 +43,6 @@ void window_match(uint8_t* word, uint16_t back_max, uint16_t fwd_max, match_t* d
     }
   }
 
-  // fprintf(stderr,"best match at %d ",offset);
-  // fprintf(stderr,"(%d)\n",best);
-
   dst->d = offset;
   dst->l = best;
 }
@@ -100,7 +97,6 @@ comp_size_t compress(uint8_t* input, uint64_t input_len, uint8_t* dst, uint8_t* 
 
 uint64_t decompress(uint8_t* input, uint8_t* flags, uint64_t input_len, uint8_t* dst)
 {
-  fprintf(stderr,"started decompress\n");
   uint64_t b=0;
   uint64_t i=0;
   uint64_t w=0;
@@ -138,7 +134,6 @@ uint64_t decompress(uint8_t* input, uint8_t* flags, uint64_t input_len, uint8_t*
 
 compressed_t *lzss_compress(decomp_t *decomp)
 {
-  fprintf(stderr,"started lzss_compress\n");
   uint64_t len = decomp->content_len;
   uint8_t *flag = (uint8_t*) calloc(BITS_TO_CHARS(len), sizeof(uint8_t));
   if(!flag)
@@ -177,7 +172,6 @@ compressed_t *lzss_compress(decomp_t *decomp)
 
 decomp_t *lzss_decomp(compressed_t *comp)
 {
-  fprintf(stderr,"started lzss_decomp\n");
   uint64_t file_len = comp->file_len;
   uint64_t comp_len = comp->content_len;
   uint64_t flag_bits = comp->flag_bits;
