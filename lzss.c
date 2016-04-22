@@ -32,33 +32,34 @@ int main(int argc, char **argv)
   FILE *fsave = fopen(savename,"w");
   FILE *input = compname ? fopen(compname,"r") : fopen(dcmpname,"r");
 
-  int64_t fsize = file_size( ((compname)?compname:dcmpname) );
 
-  unsigned char *buf = (unsigned char*) malloc(fsize * sizeof(unsigned char));
-
-  int64_t out_size;
-
+  /* Preprocessing */
   if(compname)
   {
-    fwrite((void*)&fsize,sizeof(int64_t),1,fsave);
-    out_size = fsize;
-  }
-  else
-  {
-    fread((void*)&out_size,sizeof(int64_t),1,input);
-  }
-  unsigned char *out = (unsigned char*) malloc( out_size * sizeof(unsigned char) );
+    uint64_t fsize = file_size(compname);
+    decomp_t *decomp = (decomp_t*) malloc(fsize*sizeof(uint8_t));
+    size_t read = fread(decomp->content, fsize, sizeof(uint8_t),input);
+    decomp->content_len = fsize;
 
-  int64_t cur_size = fread(buf,sizeof(unsigned char),fsize,input);
-  if( compname )
-  {
-    out_size = compress(buf,cur_size,out);
+    compressed_t *comp = lzss_compress(decomp);
+    uint64_t total_len = comp->content_len + BITS_TO_CHARS(comp->flag_bits);
+    size_t wrote = fwrite(comp, sizeof(uint8_t), sizeof(compressed_t) + total_len * sizeof(uint8_t), fsave);
+
+    fprintf(stderr,"\nwrote %d bytes\n",wrote);
   }
   else
   {
-    fprintf(stderr,"wtf\n"); fflush(0);
+    uint64_t fsize = file_size(dcmpname);
+    compressed_t *comp = (compressed_t*) malloc(fsize*sizeof(uint8_t));
+    size_t read = fread(comp, fsize, sizeof(uint8_t),input);
+
+    decomp_t *decomp = lzss_decomp(comp);
+    uint64_t total_len = decomp->content_len;
+    size_t wrote = fwrite(decomp->content, sizeof(uint8_t), total_len * sizeof(uint8_t), fsave);
+
+    fprintf(stderr,"input size %d bytes\n",comp->content_len);
+    fprintf(stderr,"wrote %d bytes\n",wrote);
   }
-  fwrite(out,sizeof(unsigned char),out_size,fsave);
   
   return 0;
 }

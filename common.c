@@ -51,7 +51,7 @@ char *read_string( int argc, char **argv, const char *option, char *default_valu
     return default_value;
 }
 
-int64_t file_size(const char *filename)
+uint64_t file_size(const char *filename)
 {
   FILE *f = fopen(filename,"r");
   if (f == NULL)
@@ -67,7 +67,7 @@ int64_t file_size(const char *filename)
     fprintf(stderr,"Could not stat %s!\n",filename);
     return -2;
   }
-  int64_t size = buf.st_size;
+  uint64_t size = buf.st_size;
   fclose(f);
 
   return size;

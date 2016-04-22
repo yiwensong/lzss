@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <limits.h>
+#include <unistd.h>
 
 #include "lzss_help.h"
 
@@ -24,12 +25,10 @@ uint64_t match_len(char* old, char* fwd, uint64_t fwd_max)
   return (uint64_t) i;
 }
 
-/* TODO: Replace this with the Z-algorithm later */
 void window_match(char* word, int64_t back_max, int64_t fwd_max, match_t* dst)
 {
   uint16_t best = 0;
   int16_t offset = 0;
-
 
   for(int16_t i=back_max;i<0;i++)
   {
@@ -46,23 +45,34 @@ void window_match(char* word, int64_t back_max, int64_t fwd_max, match_t* dst)
   dst->l = (uint16_t) best;
 }
 
-#define PUT_BIT(bit,idx) ((bit) << ((idx)%8))
+#define PUT_BIT(bit,idx) ((bit) << (7-((idx)%8)))
 #define IDX_BY_BIT(arr,idx) ((arr)[(idx)/8])
-#define GET_BIT(arr,idx) ((IDX_BY_BIT(arr,idx) >> ((idx)%8)) & 0x1)
+#define GET_BIT(arr,idx) ((IDX_BY_BIT(arr,idx) >> (7-((idx)%8))) & 0x1)
 
 /* Make sure flags is zeroed out before passed in */
-uint64_t compress(uint8_t* input, uint64_t input_len, uint8_t* dst, uint8_t* flags)
+comp_size_t compress(uint8_t* input, uint64_t input_len, uint8_t* dst, uint8_t* flags)
 {
+  for(int i=0;i<25;i++)
+  {
+    fprintf(stderr,"PUT_BIT(%d): ",i);
+    fprintf(stderr,"0x%lx\n",PUT_BIT(1,i));
+  }
   match_t match;
   int64_t i=0;
   int64_t w=0;
   int64_t b=0;
 
+
+
+  fprintf(stderr,"input len=%ld\n",input_len);
   for(;i<input_len;)
   {
     uint8_t *curr = input + i;
     int64_t window_offset = max(input-curr,i-WINDOW);
     window_match(curr, window_offset, min(input_len - i, 2*WINDOW), &match);
+
+    fprintf(stderr,"\nw %ld, ",w);
+    fprintf(stderr,"\nb %ld, ",b);
     
     if( match.l < MIN_MATCH )
     {
@@ -71,24 +81,42 @@ uint64_t compress(uint8_t* input, uint64_t input_len, uint8_t* dst, uint8_t* fla
       {
         IDX_BY_BIT(flags,b+j) |= PUT_BIT(0,b+j);
         dst[w+j] = input[i+j];
+        fprintf(stderr,"0x%lx ",dst[w+j]);
       }
-      b += match.l;
-      w += match.l;
-      i += match.l;
+      fprintf(stderr," |||| ");
+      for(int j=0;j<max(1,match.l);j++)
+      {
+        fprintf(stderr,"0x%lx ",input[i+j]);
+      }
+      b += max(1,match.l);
+      w += max(1,match.l);
+      i += max(1,match.l);
     }
     else
     {
       /* match.d is displacement */
       /* match.l is length of match */
-      IDX_BY_BIT(flags,w) |= PUT_BIT(1,w);
-      memcpy(dst,match,sizeof(match_t));
+      IDX_BY_BIT(flags,b) |= PUT_BIT(1,b);
+      memcpy(dst + w,&match,sizeof(match_t));
+      for(int j=0;j<4;j++)
+      {
+        fprintf(stderr,"0x%lx ",dst[w + j]);
+      }
       i += match.l;
       w += 4;
       b++;
+      fprintf(stderr,"MATCH flag is %d",GET_BIT(flags,b));
     }
+
+    if(i>=input_len)
+      fprintf(stderr,"\nloop ending i=%ld\n",i);
   }
 
-  return b; /* dst length can be calculated from flags and length of flags */
+  comp_size_t sizes;
+  sizes.b = b;
+  sizes.w = w;
+  fprintf(stderr,"\n\n\n\n");
+  return sizes; /* dst length can be calculated from flags and length of flags */
 }
 
 uint64_t decompress(uint8_t* input, uint8_t* flags, uint64_t input_len, uint8_t* dst)
@@ -99,29 +127,50 @@ uint64_t decompress(uint8_t* input, uint8_t* flags, uint64_t input_len, uint8_t*
 
   register uint8_t *curr;
   register uint8_t bit;
-  match_t *match;
+  match_t match;
   int16_t offset;
   uint16_t matchlen;
 
   for(;i<input_len;)
   {
+    fprintf(stderr,"%d",i);
+    fprintf(stderr,"/%d",input_len);
+    fprintf(stderr," -- %d: ",b);
     curr = input + i;
     bit = GET_BIT(flags,b);
     
     if(!bit)
     {
       dst[w] = input[i];
+      fprintf(stderr,"got 0x%lx, ",dst[w]);
+      fprintf(stderr,"expected 0x%lx\n",input[i]);
       w++; i++; b++;
     }
     else
     {
-      match = (match_t*) curr;
-      matchlen = match->l;
-      offset = match->d;
+      fprintf(stderr,"found match, ");
+      // match = (match_t*) curr;
+      // matchlen = match->l;
+      // offset = match->d;
+      memcpy(&match,curr,sizeof(match_t));
+      matchlen = match.l;
+      offset = match.d;
+      for(int j=0;j<4;j++)
+      {
+        fprintf(stderr,"0x%lx ",curr[j]);
+      }
+      if(offset>=0)
+      {
+        fprintf(stderr,"\nwtf\n");
+        return 0;
+      }
       for(int j=0;j<matchlen;j++)
       {
+        // fprintf(stderr,"offset %d, ",offset);
         dst[w + j] = dst[w + j + offset];
       }
+      fprintf(stderr,"offset %d, ",offset);
+      fprintf(stderr,"length %d\n",matchlen);
       w += matchlen;
       i += 4;
       b++;
@@ -132,16 +181,69 @@ uint64_t decompress(uint8_t* input, uint8_t* flags, uint64_t input_len, uint8_t*
 }
 
 
+compressed_t *lzss_compress(decomp_t *decomp)
+{
+  uint64_t len = decomp->content_len;
+  uint8_t *flag = (uint8_t*) calloc(BITS_TO_CHARS(len), sizeof(uint8_t));
+  if(!flag)
+  {
+    return NULL;
+  }
+  uint8_t *buf = (uint8_t*) malloc(len * sizeof(uint8_t));
+  if(!buf)
+  {
+    free(flag);
+    return NULL;
+  }
+
+  comp_size_t comp_sizes = compress(decomp->content,len,buf,flag);
+  write(2,buf,len);
+  uint64_t comp_len = comp_sizes.w;
+  uint64_t flag_bits = comp_sizes.b;
+  uint64_t flag_bytes = BITS_TO_CHARS(flag_bits);
+
+  compressed_t *comp = (compressed_t*) malloc(sizeof(compressed_t) + (flag_bytes + comp_len) * sizeof(uint8_t));
+  if(!comp){
+    free(flag);
+    free(buf);
+    return NULL;
+  }
+  comp->file_len = len;
+  comp->content_len = comp_len;
+  comp->flag_bits = flag_bits;
+  memcpy(comp->content,flag,flag_bytes);
+  memcpy(comp->content + flag_bytes,buf,comp->content_len);
+
+  free(flag);
+  free(buf);
+  return comp;
+}
 
 
+decomp_t *lzss_decomp(compressed_t *comp)
+{
+  uint64_t file_len = comp->file_len;
+  uint64_t comp_len = comp->content_len;
+  uint64_t flag_bits = comp->flag_bits;
+  uint64_t flag_bytes = BITS_TO_CHARS(flag_bits);
 
+  uint8_t *flag_buf = comp->content;
+  uint8_t *comp_buf = comp->content + flag_bytes;
 
+  // fprintf(stderr,"uncompressed file length: %d\n",file_len);
+  decomp_t *decomp = (decomp_t*) malloc(sizeof(decomp_t) + (file_len)*sizeof(uint8_t));
+  if(!decomp)
+  {
+    return NULL;
+  }
 
+  uint64_t decomp_len = decompress(comp_buf,flag_buf,comp_len,decomp->content);
+  fprintf(stderr,"ok\n");
+  decomp->content_len = decomp_len;
+  // fprintf(stderr,"file length after decomp: %d\n",decomp->content_len);
 
-
-
-
-
+  return decomp;
+}
 
 
 
@@ -151,169 +253,11 @@ uint64_t decompress(uint8_t* input, uint8_t* flags, uint64_t input_len, uint8_t*
 
 
 /*
-###################################################################################
-###################################################################################
-##                                                                               ##
-##                                                                               ##
-##            LOL                               THIS IS UNUSED BELOW             ##
-##                                                                               ##
-##                                                                               ##
-###################################################################################
-###################################################################################
-*/
+
+    compressed_t *comp_obj = (compressed_t*) malloc(
+        sizeof(compressed_t) +
+        (file_size) * sizeof(uint8_t) +
+        BITS_TO_CHARS(file_size) * sizeof(uint8_t) ); 
+        */
 
 
-
-
-
-
-
-
-
-
-
-
-
-#define BIT_IDX(arr,b) (*(arr + (b/CHAR_BIT)))
-#define TOP_NUM_BITS(b) (b%CHAR_BIT)
-#define BOT_NUM_BITS(b) (CHAR_BIT - TOP_NUM_BITS(b))
-#define TOP_BITS(c,b) (((unsigned char) c) << TOP_NUM_BITS(b))
-#define BOT_BITS(c,b) (((unsigned char) c) >> BOT_NUM_BITS(b))
-#define TOP(arr,b) TOP_BITS( BIT_IDX(arr,b) , b )
-#define BOT(arr,b) (BOT_BITS( BIT_IDX(arr,b + CHAR_BIT) , b ) & 0)
-#define FLAG(arr,b) ((((unsigned char) BIT_IDX(arr,b)) >> (BOT_NUM_BITS(b) - 1)) & 0x1)
-
-void human_readable_compression(unsigned char *comp, uint64_t len)
-{
-  unsigned char test[5];
-  test[0] = 0x0f;
-  test[1] = 0xf0;
-  test[2] = 0xff;
-  test[3] = 0xff;
-  for(unsigned char i=0;i<CHAR_BIT*2;i++)
-  {
-    fprintf(stderr,"TOP_NUM_BITS %d BOT_NUM_BITS %d\n",TOP_NUM_BITS(i),BOT_NUM_BITS(i));
-    fprintf(stderr,"TOP_BITS %x BOT_BITS %x\n",TOP(test,i),BOT(test,i));
-    fprintf(stderr,"BIT_IDX %x NEXT BIT_IDX %x\n",BIT_IDX(test,i),BIT_IDX(test,i + CHAR_BIT));
-    fprintf(stderr,"\n");
-  }
-  fprintf(stderr,"\n\n\n");
-  
-
-
-  unsigned char p_buf[ LARGE ];
-  memset(p_buf,0,LARGE);
-
-  int64_t i = 0;
-  int64_t b = 0;
-  unsigned char flag;
-  unsigned char tmp;
-  unsigned char buf[4];
-  uint16_t *uintbuf = (uint16_t*) buf;
-
-  for(; b / CHAR_BIT < len-1 ;)
-  {
-    int ii = i;
-    int bb = b;
-    flag = FLAG( comp , b );
-    // flag = (comp[b/CHAR_BIT] >> ((CHAR_BIT-1)-(b%CHAR_BIT))) & 0x1;
-
-    if (bb==739)
-    {
-      for(int asd=0;asd<2;asd++)
-      {
-        for(int j=asd*10;j<(asd+1)*10;j++)
-          char_dump_bin(comp[b/CHAR_BIT - 10 + j]);
-        fprintf(stderr,"\n");
-      }
-      fprintf(stderr,"FLAG 0x%x >> %d\n",BIT_IDX(comp,b), BOT_NUM_BITS(b) - 1);
- 
-    }
-
-    if( !flag )
-    {
-      b++;
-      /* write the next character to dst */
-      p_buf[i] = TOP(comp,b);
-      p_buf[i] |= BOT(comp,b);
-      b += CHAR_BIT;
-      if(p_buf[i] >= 0x80 && p_buf[i] <= 0x9f)
-      {
-        fprintf(stderr,"special character?? 0x%x\n",p_buf[i]);
-      }
-      i++;
-    }
-    else
-    {
-      for(int t=0;t<4;t++)
-      {
-        buf[t] = TOP(comp,b);
-        buf[t] |= BOT(comp,b);
-        b += CHAR_BIT;
-      }
-
-      if(((int16_t) uintbuf[0]) >= 0)
-      {
-        char_dump_bin(comp[(b-1-4*CHAR_BIT)/CHAR_BIT]);
-        fprintf(stderr,"FLAG 0x%x b %d b mod 8 %d\n",(comp[(b-9)/CHAR_BIT] >> ((CHAR_BIT-1)-((b-9)%CHAR_BIT))) & 0x1,
-            (int)b-9,(int)((b-1-4*CHAR_BIT)%CHAR_BIT));
-        char_dump_bin(comp[(b-4*CHAR_BIT)/CHAR_BIT]);
-        fprintf(stderr,"FLAG 0x%x b %d b mod 8 %d\n",flag,(int)b,(int)(b%CHAR_BIT));
-      }
-
-      p_buf[i] = '(';
-      i++;
-      int len = sprintf(p_buf + i,"%x", (int16_t) uintbuf[0]);
-      i += len;
-      p_buf[i] = ',';
-      i++;
-      len = sprintf(p_buf + i,"%x",uintbuf[1]);
-      i += len;
-      p_buf[i] = ')';
-      i++;
-    }
-
-    fprintf(stderr,"b: %d ||| ",bb);
-    fprintf(stderr,"f: 0x%x ||| ",flag);
-    fprintf(stderr,"s: %s\n",p_buf + ii);
-  }
-
-  p_buf[i] = '\0';
-
-  fprintf(stderr,"\nHUMAN READABLE COMPRESSED (char size %d):\n%s\n",CHAR_BIT,p_buf);
-
-}
-
-void char_dump_bin(unsigned char c)
-{
-  unsigned char buf[CHAR_BIT + 1];
-  for(int i=0;i<CHAR_BIT;i++)
-  {
-    buf[i] = '0' + ((c >> (CHAR_BIT-1-i)) & 0x1);
-  }
-  buf[8] = '\0';
-  fprintf(stderr,"%s ",buf);
-}
-
-
-
-
-/* Pass in last pointer WITH INFORMATION IN IT */
-/* buf_to_add should be memory aligned. If not, it should be zero appended */
-/* why the fuck did I try this */
-void write_unaligned(unsigned char* last, uint64_t buf_bit_size, unsigned char* buf_to_add, uint64_t add_size)
-{
-  unsigned char l = last[0];
-  uint64_t filled = buf_bit_size % CHAR_BIT;
-  uint64_t space = CHAR_BIT - filled;
-
-  unsigned char *buf = last;
-  for(int i=0;i<add_size;i++)
-  {
-    buf[i] = (unsigned char) 0;
-    buf[i] = buf[i] | l;
-    buf[i] = buf[i] | (buf_to_add[i] >> filled);
-    l = buf_to_add[i] << space;
-  }
-  buf[add_size] = l;
-}
