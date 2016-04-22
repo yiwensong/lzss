@@ -18,17 +18,20 @@ There are quite a few ways that one can implement LZSS such that it can
 compress and can be decompressed with relative ease.
 I have chosen the following designs:
 
-* Before each non-repeating character, we insert a 0 bit.
+* There is a separate flag array that is before all the data because 
+memory alignment is desirable for those writing code.
 * A repeat is denoted by a pair of numbers, offset and length.
-* The offset is a negative number indicating the offset 
-of the occurrence the phrase.
-* The length is how long the last occurrence of the phrase is
-* These are stored as 16-bit integers, the former signed and
-the latter unsigned.
-* We use a maximum of 32 KB window--that is, the maximum number
-of characters that we perform the backwards search is 32 KB 
+* The offset is a positive number indicating how many bytes to back.
+* The length is how long the last occurrence of the phrase is.
+* The offset is stored as a uint16\_t, and the length is stored
+as a uint8\_t.
+* These numbers may change as we go to optimize for compression
+ratio for various forms of documents.
+* We use a maximum of 64 KB window--that is, the maximum number
+of characters that we perform the backwards search is 64 KB 
 before the current location.
-
+* For file creation, we also write the size of the file to facilitate
+memory allocation on the decompression.
 
 ## Serial Performance
 
