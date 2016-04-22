@@ -4,7 +4,9 @@ then
   mkdir -p ./test;
 fi;
 
-for i in $( /usr/bin/ls examples );
+l=$(which ls)
+
+for i in $( $l examples );
 do
   echo -e '\n\n\n'
   echo $i

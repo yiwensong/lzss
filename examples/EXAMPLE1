@@ -195,20 +195,3 @@ decomp_t *lzss_decomp(compressed_t *comp)
 
   return decomp;
 }
-
-
-
-
-
-
-
-
-/*
-
-    compressed_t *comp_obj = (compressed_t*) malloc(
-        sizeof(compressed_t) +
-        (file_size) * sizeof(uint8_t) +
-        BITS_TO_CHARS(file_size) * sizeof(uint8_t) ); 
-        */
-
-

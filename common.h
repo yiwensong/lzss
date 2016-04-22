@@ -1,5 +1,7 @@
 #pragma once
 
+#include <stdint.h>
+
 /* TIMING */
 double read_timer();
 

@@ -5,7 +5,7 @@ CUFLAGS = -Ofast -arch=sm_35 --std=gnu99
 LIBS = -lm
 
 TARGETS = lzss ref # lzss_gpu
-OBJECTS = lzss_gpu.ou lzss_gpu_help.ou common.ou lzss.o lzss_help.o common.o
+OBJECTS = lzss_gpu.ou lzss_gpu_help.ou common.ou lzss.o lzss_help.o common.o ref.o
 
 all: $(TARGETS)
 
