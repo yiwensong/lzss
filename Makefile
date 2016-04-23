@@ -25,10 +25,12 @@ lzss_gpu: lzss_gpu.ou lzss_gpu_help.ou common.ou
 	$(NVCC) -c -o $@ $(CFLAGS) $(LIBS) $<
 
 check :		clean lzss ref
-	# ./lzss -c examples/EXAMPLE1 -o test/COMP.EXAMPLE1 2> COMP
-	# ./lzss -d test/COMP.EXAMPLE1 -o test/DECOMP.EXAMPLE1 2> DCMP
-	# diff examples/EXAMPLE1 test/DECOMP.EXAMPLE1
 	./check.sh
+
+check2 : clean lzss
+	./lzss -t -c examples/EXAMPLE1 -o test/COMP.EXAMPLE1 > test/COMP_OUT 2> test/COMP_ERR
+	./lzss -t -d test/COMP.EXAMPLE1 -o test/DECOMP.EXAMPLE1 > test/DCMP_OUT 2> test/DCMP_ERR
+	diff examples/EXAMPLE1 test/DECOMP.EXAMPLE1
 
 clean :
 	rm -rf $(TARGETS)
