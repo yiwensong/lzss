@@ -36,3 +36,4 @@ clean :
 	rm -rf $(TARGETS)
 	rm -rf $(OBJECTS)
 	rm -rf test/*
+	rm -rf *.stackdump
