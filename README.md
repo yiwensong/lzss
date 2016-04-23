@@ -42,3 +42,6 @@ memory allocation on the decompression.
 ## GPU Compression Rate
 
 ## Conclusion
+
+---
+Please also visit my personal site [here](http://defdonthire.me).
