@@ -87,7 +87,7 @@ void encode(void)
     bufferend = i;  r = N - F;  s = 0;
     while (r < bufferend) {
         f1 = (F <= bufferend - r) ? F : bufferend - r;
-        x = 0;  y = 1;  c = buffer[r];
+        x = 0;  y = 1;  c = buffer[r]; /* x is displacement, y is match length */
         for (i = r - 1; i >= s; i--)
             if (buffer[i] == c) {
                 for (j = 1; j < f1; j++)

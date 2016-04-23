@@ -8,15 +8,17 @@
 #include "common.h"
 #include "lzss_help.h"
 
-#define WINDOW ((1<<16) - 1)
-#define MAX_MATCH ((1<<8) - 1)
-#define MIN_MATCH 3
+#define DISP_BITS 12
+#define LEN_BITS 4
+#define WINDOW ((1<<DISP_BITS))
+#define MAX_MATCH ((1<<LEN_BITS) + 1)
+#define MIN_MATCH 2
 #define min(x,y) (((x) < (y)) ? (x) : (y))
 #define max(x,y) (((x) < (y)) ? (y) : (x))
 
-uint8_t match_len(uint8_t* old, uint8_t* fwd, uint16_t fwd_max)
+uint16_t match_len(uint8_t* old, uint8_t* fwd, uint16_t fwd_max)
 {
-  uint8_t i;
+  uint16_t i;
   for(i=0;i<min(fwd_max,MAX_MATCH);i++)
   {
     if( old[i] != fwd[i] )
@@ -27,15 +29,15 @@ uint8_t match_len(uint8_t* old, uint8_t* fwd, uint16_t fwd_max)
   return i;
 }
 
-void window_match(uint8_t* word, uint16_t back_max, uint16_t fwd_max, match_t* dst)
+void window_match(uint8_t* word, uint16_t back_max, uint16_t fwd_max, match_expanded_t* dst)
 {
-  uint8_t best = 0;
+  uint16_t best = 0;
   uint16_t offset = 0;
 
   for(uint16_t i=1;i<back_max;i++)
   {
     uint8_t* tmp = word - i;
-    uint8_t curr = match_len(tmp,word,fwd_max+i);
+    uint16_t curr = match_len(tmp,word,fwd_max+i);
     if(curr > best)
     {
       offset = i;
@@ -47,6 +49,31 @@ void window_match(uint8_t* word, uint16_t back_max, uint16_t fwd_max, match_t* d
   dst->l = best;
 }
 
+#define MATCH_TOP(i) ((i) >> LEN_BITS)
+#define MATCH_BOT(i) ((i) & ((1<<(LEN_BITS))-1))
+
+void unpack_match(match_expanded_t* expanded, match_t* match)
+{
+  uint16_t data = match->dl;
+  expanded->d = MATCH_TOP(data) + 1;
+  expanded->l = MATCH_BOT(data) + 2;
+  /* fprintf(stderr,"UNPACK d: %d, l: %d, dl: %d\n",expanded->d,expanded->l,match->dl); */
+}
+
+#define TO_TOP(i) ((i) << LEN_BITS)
+#define TO_BOT(i) MATCH_BOT((i))
+#define PACK(d,l) (TO_TOP((d)) | TO_BOT((l)))
+
+void pack_match(match_t* match, match_expanded_t* expanded)
+{
+  match->dl = PACK(expanded->d-1,expanded->l-2);
+  /*
+  fprintf(stderr,"PACKING TOP 0x%x ",TO_TOP(expanded->d-1));
+  fprintf(stderr,"BOT 0x%x\n",TO_BOT(expanded->l-2));
+  fprintf(stderr,"PACK d: %x, l: %x, dl: %x, mask: %x\n",expanded->d,expanded->l,match->dl,((1<<(LEN_BITS))-1));
+  */
+}
+
 #define PUT_BIT(bit,idx) ((bit) << (7-((idx)%8)))
 #define IDX_BY_BIT(arr,idx) ((arr)[(idx)/8])
 #define GET_BIT(arr,idx) ((IDX_BY_BIT(arr,idx) >> (7-((idx)%8))) & 0x1)
@@ -54,14 +81,16 @@ void window_match(uint8_t* word, uint16_t back_max, uint16_t fwd_max, match_t* d
 /* Make sure flags is zeroed out before passed in */
 comp_size_t compress(uint8_t* input, uint64_t input_len, uint8_t* dst, uint8_t* flags)
 {
-  match_t match;
+  match_expanded_t match;
+  match_t m;
   uint64_t i=0;
   uint64_t w=0;
   uint64_t b=0;
+  uint8_t *curr;
 
   for(;i<input_len;)
   {
-    uint8_t *curr = input + i;
+    curr = input + i;
     uint64_t window_offset = min(curr-input,WINDOW);
     window_match(curr, window_offset, (uint16_t) input_len-i, &match);
     if( match.l < MIN_MATCH )
@@ -81,7 +110,8 @@ comp_size_t compress(uint8_t* input, uint64_t input_len, uint8_t* dst, uint8_t* 
       /* match.d is displacement */
       /* match.l is length of match */
       IDX_BY_BIT(flags,b) |= PUT_BIT(1,b);
-      memcpy(dst + w,&match,sizeof(match_t));
+      pack_match(&m,&match);
+      memcpy(dst + w,&m,sizeof(match_t));
       i += match.l;
       w += sizeof(match_t);
       b++;
@@ -104,6 +134,7 @@ uint64_t decompress(uint8_t* input, uint8_t* flags, uint64_t input_len, uint8_t*
   register uint8_t *curr;
   register uint8_t bit;
   match_t *match;
+  match_expanded_t m;
 
   for(;i<input_len;)
   {
@@ -118,11 +149,12 @@ uint64_t decompress(uint8_t* input, uint8_t* flags, uint64_t input_len, uint8_t*
     else
     {
       match = (match_t*) curr;
-      for(int j=0;j<match->l;j++)
+      unpack_match(&m,match);
+      for(int j=0;j<m.l;j++)
       {
-        dst[w + j] = dst[w + j - match->d];
+        dst[w + j] = dst[w + j - m.d];
       }
-      w += match->l;
+      w += m.l;
       i += sizeof(match_t);
       b++;
     }

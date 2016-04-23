@@ -8,11 +8,17 @@
 #define BITS_TO_CHARS(b) (((b)+8-1)/8)
 #define FLAG_BYTES(compressed) (BITS_TO_CHARS(((compressed)->flag_bits)))
 
+typedef struct match_expanded match_expanded_t;
+struct match_expanded
+{
+  uint16_t d;
+  uint16_t l;
+};
+
 typedef struct match match_t;
 struct match
 {
-  uint16_t d;
-  uint8_t l;
+  uint16_t dl;
 };
 
 typedef struct compressed compressed_t;
