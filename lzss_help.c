@@ -8,7 +8,7 @@
 #include "common.h"
 #include "lzss_help.h"
 
-#define DISP_BITS 12
+#define DISP_BITS 11
 #define LEN_BITS 4
 #define WINDOW ((1<<DISP_BITS))
 #define MAX_MATCH ((1<<LEN_BITS) + 1)
@@ -19,13 +19,7 @@
 uint16_t match_len(uint8_t* old, uint8_t* fwd, uint16_t fwd_max)
 {
   uint16_t i;
-  for(i=0;i<min(fwd_max,MAX_MATCH);i++)
-  {
-    if( old[i] != fwd[i] )
-    {
-      break;
-    }
-  }
+  for(i=0;(i<min(fwd_max,MAX_MATCH)) && (old[i]==fwd[i]);i++);
   return i;
 }
 
@@ -57,7 +51,6 @@ void unpack_match(match_expanded_t* expanded, match_t* match)
   uint16_t data = match->dl;
   expanded->d = MATCH_TOP(data) + 1;
   expanded->l = MATCH_BOT(data) + 2;
-  /* fprintf(stderr,"UNPACK d: %d, l: %d, dl: %d\n",expanded->d,expanded->l,match->dl); */
 }
 
 #define TO_TOP(i) ((i) << LEN_BITS)
@@ -67,23 +60,21 @@ void unpack_match(match_expanded_t* expanded, match_t* match)
 void pack_match(match_t* match, match_expanded_t* expanded)
 {
   match->dl = PACK(expanded->d-1,expanded->l-2);
-  /*
-  fprintf(stderr,"PACKING TOP 0x%x ",TO_TOP(expanded->d-1));
-  fprintf(stderr,"BOT 0x%x\n",TO_BOT(expanded->l-2));
-  fprintf(stderr,"PACK d: %x, l: %x, dl: %x, mask: %x\n",expanded->d,expanded->l,match->dl,((1<<(LEN_BITS))-1));
-  */
 }
 
 #define PUT_BIT(bit,idx) ((bit) << (7-((idx)%8)))
 #define IDX_BY_BIT(arr,idx) ((arr)[(idx)/8])
 #define GET_BIT(arr,idx) ((IDX_BY_BIT(arr,idx) >> (7-((idx)%8))) & 0x1)
 
+#define MATCH_BUF_MAX (2 * WINDOW)
+#define MATCH_BUF_SIZE (MATCH_BUF_MAX + MAX_MATCH)
 /* Make sure flags is zeroed out before passed in */
 comp_size_t compress(uint8_t* input, uint64_t input_len, uint8_t* dst, uint8_t* flags)
 {
   match_expanded_t match;
   match_t m;
   uint64_t i=0;
+  uint64_t buf_off;
   uint64_t w=0;
   uint64_t b=0;
   uint8_t *curr;
@@ -91,7 +82,8 @@ comp_size_t compress(uint8_t* input, uint64_t input_len, uint8_t* dst, uint8_t* 
   for(;i<input_len;)
   {
     curr = input + i;
-    uint64_t window_offset = min(curr-input,WINDOW);
+
+    uint64_t window_offset = min(i,WINDOW);
     window_match(curr, window_offset, (uint16_t) input_len-i, &match);
     if( match.l < MIN_MATCH )
     {
@@ -99,7 +91,7 @@ comp_size_t compress(uint8_t* input, uint64_t input_len, uint8_t* dst, uint8_t* 
       for(int j=0;j<max(1,match.l);j++)
       {
         IDX_BY_BIT(flags,b+j) |= PUT_BIT(0,b+j);
-        dst[w+j] = input[i+j];
+        dst[w+j] = curr[j];
       }
       b += max(1,match.l);
       w += max(1,match.l);

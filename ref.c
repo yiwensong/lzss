@@ -181,6 +181,6 @@ int main(int argc, char *argv[])
     if (enc) encode();  else decode();
     fclose(infile);  fclose(outfile);
 
-    fprintf(stderr,"Time elapsed: %lf\n\n\n\n",(read_timer()-t));
+    fprintf(stdout,"Time elapsed: %lf\n\n\n\n",(read_timer()-t));
     return 0;
 }
