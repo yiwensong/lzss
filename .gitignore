@@ -1,5 +1,6 @@
 .*.swp
 *.o
+*.ou
 lzss
 lzss-gpu
 ref
