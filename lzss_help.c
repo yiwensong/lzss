@@ -31,11 +31,14 @@ void window_match(uint8_t* word, uint16_t back_max, uint16_t fwd_max, match_expa
   for(uint16_t i=1;i<back_max;i++)
   {
     uint8_t* tmp = word - i;
-    uint16_t curr = match_len(tmp,word,fwd_max+i);
-    if(curr > best)
+    if(tmp[0] == word[0])
     {
-      offset = i;
-      best = curr;
+      uint16_t curr = match_len(tmp,word,fwd_max+i);
+      if(curr > best)
+      {
+        offset = i;
+        best = curr;
+      }
     }
   }
 
