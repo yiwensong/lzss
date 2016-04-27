@@ -19,7 +19,7 @@
 uint16_t match_len(uint8_t* old, uint8_t* fwd, uint16_t fwd_max)
 {
   uint16_t i;
-  for(i=0;(i<min(fwd_max,MAX_MATCH)) && (old[i]==fwd[i]);i++);
+  for(i=2;(i<min(fwd_max,MAX_MATCH)) && (old[i]==fwd[i]);i++);
   return i;
 }
 
@@ -31,7 +31,7 @@ void window_match(uint8_t* word, uint16_t back_max, uint16_t fwd_max, match_expa
   for(uint16_t i=1;i<back_max;i++)
   {
     uint8_t* tmp = word - i;
-    if(tmp[0] == word[0])
+    if(tmp[0] == word[0] && tmp[1] == word[1])
     {
       uint16_t curr = match_len(tmp,word,fwd_max+i);
       if(curr > best)
