@@ -15,14 +15,14 @@
 #define min(x,y) (((x) < (y)) ? (x) : (y))
 #define max(x,y) (((x) < (y)) ? (y) : (x))
 
-uint16_t match_len(uint8_t* old, uint8_t* fwd, uint16_t fwd_max)
+__device__ uint16_t match_len(uint8_t* old, uint8_t* fwd, uint16_t fwd_max)
 {
   uint16_t i;
   for(i=0;(i<min(fwd_max,MAX_MATCH)) && (old[i]==fwd[i]);i++);
   return i;
 }
 
-void window_match(uint8_t* word, uint16_t back_max, uint16_t fwd_max, match_expanded_t* dst)
+__device__ void window_match(uint8_t* word, uint16_t back_max, uint16_t fwd_max, match_expanded_t* dst)
 {
   uint16_t best = 0;
   uint16_t offset = 0;
@@ -56,7 +56,7 @@ void unpack_match(match_expanded_t* expanded, match_t* match)
 #define TO_BOT(i) MATCH_BOT((i))
 #define PACK(d,l) (TO_TOP((d)) | TO_BOT((l)))
 
-void pack_match(match_t* match, match_expanded_t* expanded)
+__device__ void pack_match(match_t* match, match_expanded_t* expanded)
 {
   match->dl = PACK(expanded->d-1,expanded->l-2);
 }
@@ -65,31 +65,40 @@ void pack_match(match_t* match, match_expanded_t* expanded)
 #define IDX_BY_BIT(arr,idx) ((arr)[(idx)/8])
 #define GET_BIT(arr,idx) ((IDX_BY_BIT(arr,idx) >> (7-((idx)%8))) & 0x1)
 
-#define MATCH_BUF_MAX (2 * WINDOW)
-#define MATCH_BUF_SIZE (MATCH_BUF_MAX + MAX_MATCH)
 /* Make sure flags is zeroed out before passed in */
-comp_size_t compress(uint8_t* input, uint64_t input_len, uint8_t* dst, uint8_t* flags)
+__global__ void gpu_compress(uint8_t* input, uint64_t input_len, uint8_t* dst, uint8_t* flags, comp_size_t *size)
 {
+  /* threadIdx.x; */
+  uint64_t global_idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+  uint64_t partition_size = (input_len + gridDim.x * blockDim.x - 1)/(gridDim.x * blockDim.x);
+  int64_t parition_off = global_idx * partition_size;
+
+  input = input + partition_off;
+  dst = dst + partition_off;
+  flags = flags + partition_off;
+  size = size + global_idx;
+
   match_expanded_t match;
   match_t m;
   uint64_t i=0;
-  uint64_t buf_off;
   uint64_t w=0;
   uint64_t b=0;
   uint8_t *curr;
 
-  for(;i<input_len;)
+  for(;i<min(input_len,partition_size);)
   {
     curr = input + i;
 
-    uint64_t window_offset = min(i,WINDOW);
-    window_match(curr, window_offset, (uint16_t) input_len-i, &match);
+    uint64_t window_offset = min(partition_off + i,WINDOW);
+    window_match(curr, window_offset, (uint16_t) input_len-partition_off-i, &match);
     if( match.l < MIN_MATCH )
     {
       /* add 0 bit and the byte */
       for(int j=0;j<max(1,match.l);j++)
       {
-        IDX_BY_BIT(flags,b+j) |= PUT_BIT(0,b+j);
+        /* IDX_BY_BIT(flags,b+j) |= PUT_BIT(0,b+j); */
+        flags[b+j] = 0;
         dst[w+j] = curr[j];
       }
       b += max(1,match.l);
@@ -100,9 +109,11 @@ comp_size_t compress(uint8_t* input, uint64_t input_len, uint8_t* dst, uint8_t* 
     {
       /* match.d is displacement */
       /* match.l is length of match */
-      IDX_BY_BIT(flags,b) |= PUT_BIT(1,b);
+      /* IDX_BY_BIT(flags,b) |= PUT_BIT(1,b); */
+      flags[b] = 1;
       pack_match(&m,&match);
-      memcpy(dst + w,&m,sizeof(match_t));
+      /* memcpy(dst + w,&m,sizeof(match_t)); */
+      m = dst[w];
       i += match.l;
       w += sizeof(match_t);
       b++;
@@ -110,10 +121,55 @@ comp_size_t compress(uint8_t* input, uint64_t input_len, uint8_t* dst, uint8_t* 
 
   }
 
-  comp_size_t sizes;
-  sizes.b = b;
-  sizes.w = w;
-  return sizes; /* dst length can be calculated from flags and length of flags */
+  size->b = b;
+  size->w = w;
+}
+
+#define THREADS 256
+#define BLOCKS 16
+#define PARTITION_SIZE ((input_len + THREADS * BLOCKS - 1)/(THREADS * BLOCKS))
+comp_size_t compress(uint8_t* input, uint64_t input_len, uint8_t* dst, uint8_t* flags)
+{
+  uint8_t *gpu_input, *gpu_dst, *gpu_flags;
+  comp_size_t *sizes, *gpu_sizes;
+
+  cudaDeviceSynchronize();
+
+  cudaMalloc(&gpu_input, input_len);
+  cudaMalloc(&gpu_dst, input_len);
+  cudaMalloc(&gpu_flags, input_len);
+  cudaMalloc(&gpu_sizes, BLOCKS * THREADS * sizeof(comp_size_t));
+
+  cudaMemcpy(gpu_input,input,input_len,cudaMemcpyHostToDevice);
+
+  cudaDeviceSynchronize();
+
+  gpu_compress <<<BLOCKS,THREADS>>> (gpu_input, input_len, gpu_dst, gpu_flags, gpu_sizes);
+
+  cudaDeviceSynchronize();
+
+  comp_size_t cmp_size;
+  cmp_size.b = 0;
+  cmp_size.w = 0;
+
+  cudaMemcpy(sizes, gpu_sizes, THREADS * sizeof(comp_size_t), cudaMemcpyDeviceToHost);
+
+  uint8_t *flag_buf = (uint8_t*) malloc(input_len);
+  for(int i=0;i<THREADS;i++)
+  {
+    cudaMemcpy(dst + cmp_size.w , gpu_dst + i * PARTITION_SIZE,sizes[i].w, cudaMemcpyDeviceToHost);
+    cudaMemcpy(flag_buf + cmp_size.b , gpu_flags + i * PARTITION_SIZE,sizes[i].b, cudaMemcpyDeviceToHost);
+    cmp_size.b += sizes[i].b;
+    cmp_size.w += sizes[i].w;
+  }
+
+  memset(flags,0,(cmp_size.b+7)/8);
+  for(int i=0;i<cmp_size.b;i++)
+  {
+    IDX_BY_BIT(flags,i) |= PUT_BIT(flag_buf[i],i);
+  }
+
+  return cmp_size
 }
 
 uint64_t decompress(uint8_t* input, uint8_t* flags, uint64_t input_len, uint8_t* dst)

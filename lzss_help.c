@@ -77,7 +77,6 @@ comp_size_t compress(uint8_t* input, uint64_t input_len, uint8_t* dst, uint8_t* 
   match_expanded_t match;
   match_t m;
   uint64_t i=0;
-  uint64_t buf_off;
   uint64_t w=0;
   uint64_t b=0;
   uint8_t *curr;
