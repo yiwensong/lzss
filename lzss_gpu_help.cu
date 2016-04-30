@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <limits.h>
+#include <cuda.h>
 
 #include "common.h"
 #include "lzss_help.h"
@@ -71,8 +72,22 @@ __global__ void gpu_compress(uint8_t* input, uint64_t input_len, uint8_t* dst, u
   /* threadIdx.x; */
   uint64_t global_idx = blockIdx.x * blockDim.x + threadIdx.x;
 
-  uint64_t partition_size = (input_len + gridDim.x * blockDim.x - 1)/(gridDim.x * blockDim.x);
-  int64_t parition_off = global_idx * partition_size;
+  /* uint64_t partition_size = (input_len + (gridDim.x * blockDim.x) - 1)/(gridDim.x * blockDim.x); */
+  uint64_t partition_size = (global_idx <= input_len % (gridDim.x * blockDim.x)) ?
+    (input_len + (gridDim.x * blockDim.x) - 1)/(gridDim.x * blockDim.x) :
+    input_len/(gridDim.x * blockDim.x);
+  /* int64_t partition_off = global_idx * partition_size; */
+  int64_t partition_off = (global_idx <= input_len % (gridDim.x * blockDim.x)) ?
+    partition_size * global_idx :
+    partition_size * global_idx +
+    (input_len % (gridDim.x * blockDim.x)) * ((input_len + (gridDim.x * blockDim.x) - 1)/(gridDim.x * blockDim.x) - partition_size);
+    
+
+  /*
+  printf("%ld %d %d %d %d %ld %ld %ld %ld\n",
+      global_idx + 100000, blockIdx.x, blockDim.x, threadIdx.x, gridDim.x, global_idx, partition_size, partition_off, input_len);
+  return;
+  */
 
   input = input + partition_off;
   dst = dst + partition_off;
@@ -86,9 +101,11 @@ __global__ void gpu_compress(uint8_t* input, uint64_t input_len, uint8_t* dst, u
   uint64_t b=0;
   uint8_t *curr;
 
-  for(;i<min(input_len,partition_size);)
+  for(;i<min((int64_t)input_len-partition_off,partition_size);)
   {
     curr = input + i;
+
+    printf("OFFSET %5i\n",partition_off + i + 100000);
 
     uint64_t window_offset = min(partition_off + i,WINDOW);
     window_match(curr, window_offset, (uint16_t) input_len-partition_off-i, &match);
@@ -113,7 +130,7 @@ __global__ void gpu_compress(uint8_t* input, uint64_t input_len, uint8_t* dst, u
       flags[b] = 1;
       pack_match(&m,&match);
       /* memcpy(dst + w,&m,sizeof(match_t)); */
-      m = dst[w];
+      m = *((match_t*)(dst + w));
       i += match.l;
       w += sizeof(match_t);
       b++;
@@ -152,16 +169,19 @@ comp_size_t compress(uint8_t* input, uint64_t input_len, uint8_t* dst, uint8_t* 
   cmp_size.b = 0;
   cmp_size.w = 0;
 
-  cudaMemcpy(sizes, gpu_sizes, THREADS * sizeof(comp_size_t), cudaMemcpyDeviceToHost);
+  sizes = (comp_size_t*) malloc(THREADS * BLOCKS * sizeof(comp_size_t));
+  cudaMemcpy(sizes, gpu_sizes, THREADS * BLOCKS * sizeof(comp_size_t), cudaMemcpyDeviceToHost);
 
   uint8_t *flag_buf = (uint8_t*) malloc(input_len);
-  for(int i=0;i<THREADS;i++)
+  for(int i=0;i<THREADS*BLOCKS;i++)
   {
-    cudaMemcpy(dst + cmp_size.w , gpu_dst + i * PARTITION_SIZE,sizes[i].w, cudaMemcpyDeviceToHost);
-    cudaMemcpy(flag_buf + cmp_size.b , gpu_flags + i * PARTITION_SIZE,sizes[i].b, cudaMemcpyDeviceToHost);
+    cudaMemcpy(dst + cmp_size.w , gpu_dst + i * PARTITION_SIZE, sizes[i].w, cudaMemcpyDeviceToHost);
+    cudaMemcpy(flag_buf + cmp_size.b , gpu_flags + i * PARTITION_SIZE, sizes[i].b, cudaMemcpyDeviceToHost);
     cmp_size.b += sizes[i].b;
     cmp_size.w += sizes[i].w;
   }
+
+  fprintf(stdout,"flag bits: %ld, stuff bytes: %ld\n",cmp_size.b,cmp_size.w);
 
   memset(flags,0,(cmp_size.b+7)/8);
   for(int i=0;i<cmp_size.b;i++)
@@ -169,7 +189,7 @@ comp_size_t compress(uint8_t* input, uint64_t input_len, uint8_t* dst, uint8_t* 
     IDX_BY_BIT(flags,i) |= PUT_BIT(flag_buf[i],i);
   }
 
-  return cmp_size
+  return cmp_size;
 }
 
 uint64_t decompress(uint8_t* input, uint8_t* flags, uint64_t input_len, uint8_t* dst)
