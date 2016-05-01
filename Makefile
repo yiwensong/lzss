@@ -30,8 +30,8 @@ check-gpu : clean gpu ref
 	./check-gpu.sh
 
 check2-gpu : gpu ref
-	./lzss-gpu -t -c examples/EXAMPLE1 -o test/COMPG.EXAMPLE1 > test/COMP_OUT 2> test/COMP_ERR
-	./lzss-gpu -t -d test/COMPG.EXAMPLE1 -o test/DECOMPG.EXAMPLE1 > test/DCMP_OUT 2> test/DCMP_ERR
+	./lzss-gpu -t -c examples/EXAMPLE1 -o test/COMPG.EXAMPLE1 > test/COMPG_OUT 2> test/COMPG_ERR
+	./lzss-gpu -t -d test/COMPG.EXAMPLE1 -o test/DECOMPG.EXAMPLE1 > test/DCMPG_OUT 2> test/DCMPG_ERR
 	./ref e examples/EXAMPLE1 test/ref.EXAMPLE1 > test/REF_OUT 2> test/REF_ERR
 	diff examples/EXAMPLE1 test/DECOMPG.EXAMPLE1
 

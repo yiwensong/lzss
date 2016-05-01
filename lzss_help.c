@@ -117,6 +117,11 @@ comp_size_t compress(uint8_t* input, uint64_t input_len, uint8_t* dst, uint8_t* 
   sizes.b = b;
   sizes.w = w;
 
+  for(int i=0;i<(sizes.b + 7)/8;i++)
+  {
+    fprintf(stdout,"flag byte: %x\n",flags[i]);
+  }
+
   fprintf(stderr,"flag bits: %ld, stuff bytes: %ld\n",b,w);
   return sizes; /* dst length can be calculated from flags and length of flags */
 }

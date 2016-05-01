@@ -66,6 +66,7 @@ __device__ void pack_match(match_t* match, match_expanded_t* expanded)
 #define IDX_BY_BIT(arr,idx) ((arr)[(idx)/8])
 #define GET_BIT(arr,idx) ((IDX_BY_BIT(arr,idx) >> (7-((idx)%8))) & 0x1)
 
+#define END (min((int64_t)(input_len-partition_off),(int64_t)partition_size))
 /* Make sure flags is zeroed out before passed in */
 __global__ void gpu_compress(uint8_t* input, uint64_t input_len, uint8_t* dst, uint8_t* flags, comp_size_t *size)
 {
@@ -91,7 +92,7 @@ __global__ void gpu_compress(uint8_t* input, uint64_t input_len, uint8_t* dst, u
   printf("thread ID: %ld, last idx: %ld\n", global_idx + 100000, min((int64_t)(input_len-partition_off),(int64_t)partition_size));
   return;
   */
-  for(;i<min((int64_t)(input_len-partition_off),(int64_t)partition_size) && partition_size > 0;)
+  for(;i<END && partition_size > 0;)
   {
     curr = input + i;
 
@@ -100,12 +101,9 @@ __global__ void gpu_compress(uint8_t* input, uint64_t input_len, uint8_t* dst, u
     if( match.l < MIN_MATCH )
     {
       /* add 0 bit and the byte */
-      for(int j=0;j<max(1,match.l);j++)
-      {
         /* IDX_BY_BIT(flags,b+j) |= PUT_BIT(0,b+j); */
-        flags[b+j] = 0;
-        dst[w+j] = curr[j];
-      }
+      flags[b] = 0;
+      dst[w] = curr[0];
       b += max(1,match.l);
       w += max(1,match.l);
       i += max(1,match.l);
@@ -129,18 +127,27 @@ __global__ void gpu_compress(uint8_t* input, uint64_t input_len, uint8_t* dst, u
 
   size->b = b;
   size->w = w;
-  printf("DONE %ld\n", global_idx + 1000000);
+  printf("DONE %ld size %ld %ld %ld\n", global_idx + 1000000,END,b,w);
 }
 
 #define THREADS 1
 #define BLOCKS ((input_len + (THREADS * MAX_MATCH * 2) + 1)/(THREADS * MAX_MATCH * 2))
-#define PARTITION_SIZE ((input_len + THREADS * BLOCKS - 1)/(THREADS * BLOCKS))
+#define PARTITION_SIZE min(MAX_MATCH*2,((input_len + THREADS * BLOCKS - 1)/(THREADS * BLOCKS)))
 comp_size_t compress(uint8_t* input, uint64_t input_len, uint8_t* dst, uint8_t* flags)
 {
   uint8_t *gpu_input, *gpu_dst, *gpu_flags;
   comp_size_t *sizes, *gpu_sizes;
   printf("length: %ld, THREADS: %d, BLOCKS: %ld\n",input_len, THREADS, BLOCKS); fflush(0);
-  cudaDeviceSynchronize();
+  cudaError_t synch_error = cudaDeviceSynchronize();
+  if(synch_error != cudaSuccess)
+  {
+    fprintf(stderr,"wtf\n");
+  }
+  else
+  {
+    fprintf(stdout,"ok\n");
+  }
+  printf("length: %ld, THREADS: %d, BLOCKS: %ld\n",input_len, THREADS, BLOCKS); fflush(0);
 
   cudaMalloc(&gpu_input, input_len);
   cudaMalloc(&gpu_dst, input_len);
@@ -165,9 +172,9 @@ comp_size_t compress(uint8_t* input, uint64_t input_len, uint8_t* dst, uint8_t* 
   uint8_t *flag_buf = (uint8_t*) malloc(input_len);
   for(int i=0;i<THREADS*BLOCKS;i++)
   {
-    cudaMemcpy(dst + cmp_size.w , gpu_dst + i * PARTITION_SIZE, sizes[i].w, cudaMemcpyDeviceToHost);
+    cudaMemcpy(dst + cmp_size.w, gpu_dst + i * PARTITION_SIZE, sizes[i].w, cudaMemcpyDeviceToHost);
     cudaMemcpy(flag_buf + cmp_size.b , gpu_flags + i * PARTITION_SIZE, sizes[i].b, cudaMemcpyDeviceToHost);
-    fprintf(stdout,"bsize[%3.3d] = %3.3d, wsize[%3.3d] = %3.3d\n",i,sizes[i].b,i,sizes[i].w);
+    fprintf(stdout,"PARTITION SIZE %ld bsize[%3.3d] = %3.3d, wsize[%3.3d] = %3.3d\n",PARTITION_SIZE,i,sizes[i].b,i,sizes[i].w);
     cmp_size.b += sizes[i].b;
     cmp_size.w += sizes[i].w;
   }
@@ -177,7 +184,15 @@ comp_size_t compress(uint8_t* input, uint64_t input_len, uint8_t* dst, uint8_t* 
   memset(flags,0,(cmp_size.b+7)/8);
   for(int i=0;i<cmp_size.b;i++)
   {
-    IDX_BY_BIT(flags,i) |= PUT_BIT(flag_buf[i],i);
+    fprintf(stdout,"flag bit %i: %d\n",i,flag_buf[i]);
+
+    IDX_BY_BIT(flags,i) = (i%8) ? IDX_BY_BIT(flags,i) : 0;
+    IDX_BY_BIT(flags,i) |= PUT_BIT((flag_buf[i]?1:0),i);
+  }
+
+  for(int i=0;i<(cmp_size.b + 7)/8;i++)
+  {
+    fprintf(stdout,"flag byte: %x\n",flags[i]);
   }
 
   return cmp_size;

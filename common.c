@@ -57,7 +57,7 @@ uint64_t file_size(const char *filename)
   if (f == NULL)
   {
     fprintf(stderr,"Could not open %s for reading!\n",filename);
-    return -1;
+    return 0;
   }
 
   struct stat buf;
@@ -65,7 +65,7 @@ uint64_t file_size(const char *filename)
   if (fstat(fd,&buf) != 0)
   {
     fprintf(stderr,"Could not stat %s!\n",filename);
-    return -2;
+    return 0;
   }
   uint64_t size = buf.st_size;
   fclose(f);
