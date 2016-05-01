@@ -95,8 +95,6 @@ __global__ void gpu_compress(uint8_t* input, uint64_t input_len, uint8_t* dst, u
   {
     curr = input + i;
 
-    printf("OFFSET %5i\n",partition_off + i + 100000);
-
     uint64_t window_offset = min(partition_off + i,WINDOW);
     window_match(curr, window_offset, min((uint16_t) input_len-partition_off-i, (uint16_t) partition_size-i), &match);
     if( match.l < MIN_MATCH )
@@ -120,7 +118,8 @@ __global__ void gpu_compress(uint8_t* input, uint64_t input_len, uint8_t* dst, u
       flags[b] = 1;
       pack_match(&m,&match);
       /* memcpy(dst + w,&m,sizeof(match_t)); */
-      m = *((match_t*)(dst + w));
+      *(/*(match_t*)*/(dst + w)) = ((m.dl >> 8) & 0xff);
+      *(/*(match_t*)*/(dst + w + 1)) = (m.dl & 0xff);
       i += match.l;
       w += sizeof(match_t);
       b++;
@@ -133,7 +132,7 @@ __global__ void gpu_compress(uint8_t* input, uint64_t input_len, uint8_t* dst, u
   printf("DONE %ld\n", global_idx + 1000000);
 }
 
-#define THREADS 256
+#define THREADS 1
 #define BLOCKS ((input_len + (THREADS * MAX_MATCH * 2) + 1)/(THREADS * MAX_MATCH * 2))
 #define PARTITION_SIZE ((input_len + THREADS * BLOCKS - 1)/(THREADS * BLOCKS))
 comp_size_t compress(uint8_t* input, uint64_t input_len, uint8_t* dst, uint8_t* flags)

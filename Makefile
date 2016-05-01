@@ -29,17 +29,19 @@ check :		clean lzss ref
 check-gpu : clean gpu ref
 	./check-gpu.sh
 
-check2-gpu : clean gpu ref
+check2-gpu : gpu ref
 	./lzss-gpu -t -c examples/EXAMPLE1 -o test/COMPG.EXAMPLE1 > test/COMP_OUT 2> test/COMP_ERR
 	./lzss-gpu -t -d test/COMPG.EXAMPLE1 -o test/DECOMPG.EXAMPLE1 > test/DCMP_OUT 2> test/DCMP_ERR
 	./ref e examples/EXAMPLE1 test/ref.EXAMPLE1 > test/REF_OUT 2> test/REF_ERR
 	diff examples/EXAMPLE1 test/DECOMPG.EXAMPLE1
 
-check2 : clean lzss ref
-	./lzss -t -c examples/EXAMPLE2 -o test/COMP.EXAMPLE2 > test/COMP_OUT 2> test/COMP_ERR
-	./lzss -t -d test/COMP.EXAMPLE2 -o test/DECOMP.EXAMPLE2 > test/DCMP_OUT 2> test/DCMP_ERR
-	./ref e examples/EXAMPLE2 test/ref.EXAMPLE2 > test/REF_OUT 2> test/REF_ERR
-	diff examples/EXAMPLE2 test/DECOMP.EXAMPLE2
+check2 : lzss ref
+	./lzss -t -c examples/EXAMPLE1 -o test/COMP.EXAMPLE1 > test/COMP_OUT 2> test/COMP_ERR
+	./lzss -t -d test/COMP.EXAMPLE1 -o test/DECOMP.EXAMPLE1 > test/DCMP_OUT 2> test/DCMP_ERR
+	./ref e examples/EXAMPLE1 test/ref.EXAMPLE1 > test/REF_OUT 2> test/REF_ERR
+	diff examples/EXAMPLE1 test/DECOMP.EXAMPLE1
+
+c: check2-gpu check2
 
 clean :
 	rm -rf $(TARGETS)
