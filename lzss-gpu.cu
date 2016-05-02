@@ -7,8 +7,11 @@
 #include "lzss_gpu_help.h"
 #include "common.h"
 
+int t;
+
 int main(int argc, char **argv)
 {
+  cudaDeviceSynchronize();
   char *savename = read_string( argc, argv, "-o", NULL );
   char *compname = read_string( argc, argv, "-c", NULL );
   char *dcmpname = read_string( argc, argv, "-d", NULL );
@@ -28,7 +31,7 @@ int main(int argc, char **argv)
   }
 
   double time;
-  int t = (find_option( argc, argv, "-t" ) >= 0);
+  t = (find_option( argc, argv, "-t" ) >= 0);
 
   FILE *input = compname ? fopen(compname,"r") : fopen(dcmpname,"r");
   if(!input)
@@ -43,12 +46,13 @@ int main(int argc, char **argv)
     time = read_timer();
   }
 
+
   uint64_t fsize;
   /* Preprocessing */
   if(compname)
   {
     fsize = file_size(compname);
-    decomp_t *decomp = (decomp_t*) malloc(fsize*sizeof(uint8_t));
+    decomp_t *decomp = (decomp_t*) malloc(fsize*sizeof(uint8_t) + sizeof(decomp_t));
     size_t read = fread(decomp->content, fsize, sizeof(uint8_t),input);
     decomp->content_len = fsize;
     if(t)

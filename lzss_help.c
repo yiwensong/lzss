@@ -9,7 +9,7 @@
 #include "lzss_help.h"
 
 #define DISP_BITS 11
-#define LEN_BITS 4
+#define LEN_BITS 5
 #define WINDOW ((1<<DISP_BITS))
 #define MAX_MATCH ((1<<LEN_BITS) + 1)
 #define MIN_MATCH 2
@@ -28,7 +28,7 @@ void window_match(uint8_t* word, uint16_t back_max, uint16_t fwd_max, match_expa
   uint16_t best = 0;
   uint16_t offset = 0;
 
-  for(uint16_t i=1;i<back_max;i++)
+  for(uint16_t i=1;i<back_max && fwd_max > 1;i++)
   {
     uint8_t* tmp = word - i;
     if(tmp[0] == word[0] && tmp[1] == word[1])
@@ -89,6 +89,7 @@ comp_size_t compress(uint8_t* input, uint64_t input_len, uint8_t* dst, uint8_t* 
     window_match(curr, window_offset, (uint16_t) input_len-i, &match);
     if( match.l < MIN_MATCH )
     {
+      fprintf(stderr,"i %d: bit is 0 writing %c\n",i,curr[0]);
       /* add 0 bit and the byte */
       for(int j=0;j<max(1,match.l);j++)
       {
@@ -103,6 +104,7 @@ comp_size_t compress(uint8_t* input, uint64_t input_len, uint8_t* dst, uint8_t* 
     {
       /* match.d is displacement */
       /* match.l is length of match */
+      fprintf(stderr,"i %d: bit is 1 matchoff %d matchlen %d\n",i,match.d,match.l);
       IDX_BY_BIT(flags,b) |= PUT_BIT(1,b);
       pack_match(&m,&match);
       memcpy(dst + w,&m,sizeof(match_t));
@@ -116,11 +118,6 @@ comp_size_t compress(uint8_t* input, uint64_t input_len, uint8_t* dst, uint8_t* 
   comp_size_t sizes;
   sizes.b = b;
   sizes.w = w;
-
-  for(int i=0;i<(sizes.b + 7)/8;i++)
-  {
-    fprintf(stdout,"flag byte: %x\n",flags[i]);
-  }
 
   fprintf(stderr,"flag bits: %ld, stuff bytes: %ld\n",b,w);
   return sizes; /* dst length can be calculated from flags and length of flags */

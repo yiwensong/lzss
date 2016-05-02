@@ -3,6 +3,7 @@ NVCC = nvcc
 CFLAGS = --std=gnu99 -Ofast -fgcse-sm -fgcse-las
 CUFLAGS = # -O0 # -arch=sm_35
 LIBS = -lm
+e = 2
 
 TARGETS = lzss ref lzss-gpu
 OBJECTS = lzss_gpu.ou lzss_gpu_help.ou common.ou lzss.o lzss_help.o common.o ref.o
@@ -30,16 +31,16 @@ check-gpu : clean gpu ref
 	./check-gpu.sh
 
 check2-gpu : gpu ref
-	./lzss-gpu -t -c examples/EXAMPLE1 -o test/COMPG.EXAMPLE1 > test/COMPG_OUT 2> test/COMPG_ERR
-	./lzss-gpu -t -d test/COMPG.EXAMPLE1 -o test/DECOMPG.EXAMPLE1 > test/DCMPG_OUT 2> test/DCMPG_ERR
-	./ref e examples/EXAMPLE1 test/ref.EXAMPLE1 > test/REF_OUT 2> test/REF_ERR
-	diff examples/EXAMPLE1 test/DECOMPG.EXAMPLE1
+	./lzss-gpu -t -c examples/EXAMPLE$e -o test/COMPG.EXAMPLE$e > test/COMPG_OUT 2> test/COMPG_ERR
+	./lzss-gpu -t -d test/COMPG.EXAMPLE$e -o test/DECOMPG.EXAMPLE$e > test/DCMPG_OUT 2> test/DCMPG_ERR
+	./ref e examples/EXAMPLE$e test/ref.EXAMPLE$e > test/REF_OUT 2> test/REF_ERR
+	diff examples/EXAMPLE$e test/DECOMPG.EXAMPLE$e
 
 check2 : lzss ref
-	./lzss -t -c examples/EXAMPLE1 -o test/COMP.EXAMPLE1 > test/COMP_OUT 2> test/COMP_ERR
-	./lzss -t -d test/COMP.EXAMPLE1 -o test/DECOMP.EXAMPLE1 > test/DCMP_OUT 2> test/DCMP_ERR
-	./ref e examples/EXAMPLE1 test/ref.EXAMPLE1 > test/REF_OUT 2> test/REF_ERR
-	diff examples/EXAMPLE1 test/DECOMP.EXAMPLE1
+	./lzss -t -c examples/EXAMPLE$e -o test/COMP.EXAMPLE$e > test/COMP_OUT 2> test/COMP_ERR
+	./lzss -t -d test/COMP.EXAMPLE$e -o test/DECOMP.EXAMPLE$e > test/DCMP_OUT 2> test/DCMP_ERR
+	./ref e examples/EXAMPLE$e test/ref.EXAMPLE$e > test/REF_OUT 2> test/REF_ERR
+	diff examples/EXAMPLE$e test/DECOMP.EXAMPLE$e
 
 c: check2-gpu check2
 

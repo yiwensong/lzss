@@ -47,8 +47,10 @@ int main(int argc, char **argv)
   if(compname)
   {
     fsize = file_size(compname);
-    decomp_t *decomp = (decomp_t*) malloc(fsize*sizeof(uint8_t));
+    fprintf(stderr,"file size %ld\n",fsize);
+    decomp_t *decomp = (decomp_t*) malloc(fsize*sizeof(uint8_t) + sizeof(decomp_t));
     size_t read = fread(decomp->content, fsize, sizeof(uint8_t),input);
+    
     decomp->content_len = fsize;
     if(t)
     {
