@@ -47,12 +47,12 @@ void pack_match(match_t* match, match_expanded_t* expanded)
 
 #define PACK_MATCH(match,exp) ((match->dl = PACK(exp->d-1,exp->l-2)))
 
-__global__ void window_match(uint8_t* input, uint64_t length, match_expanded_t* flags)
+__global__ void window_match(uint8_t* input, uint64_t length, uint64_t iter, match_expanded_t* flags)
 {
   uint16_t best = 0;
   uint16_t offset = 0;
 
-  uint64_t global_idx = blockIdx.x * blockDim.x + threadIdx.x;
+  uint64_t global_idx = iter * blockDim.x * gridDim.x + blockIdx.x * blockDim.x + threadIdx.x;
   if(global_idx >= length) return;
 
   uint8_t *word = input + global_idx;
@@ -89,6 +89,7 @@ __global__ void window_match(uint8_t* input, uint64_t length, match_expanded_t* 
 #define MATCH_BUF_SIZE (MATCH_BUF_MAX + MAX_MATCH)
 #define THREADS (32<<5)
 #define BLOCKS ((input_len + THREADS - 1)/THREADS)
+#define MAX_BLOCKS 65535
 /* Make sure flags is zeroed out before passed in */
 comp_size_t compress(uint8_t* input, uint64_t input_len, uint8_t* dst, uint8_t* flags)
 {
@@ -104,13 +105,18 @@ comp_size_t compress(uint8_t* input, uint64_t input_len, uint8_t* dst, uint8_t* 
   cudaDeviceSynchronize();
   uint8_t *gpu_input;
   match_expanded_t *gpu_match;
-  cudaMalloc(&gpu_input, input_len * sizeof(uint8_t));
-  cudaMalloc(&gpu_match, input_len * sizeof(match_expanded_t));
+  if(cudaMalloc(&gpu_input, input_len * sizeof(uint8_t))          != cudaSuccess) { fprintf(stderr,"malloc failed!\n"); }
+  if(cudaMalloc(&gpu_match, input_len * sizeof(match_expanded_t)) != cudaSuccess) { fprintf(stderr,"malloc failed!\n"); }
   cudaMemcpy(gpu_input,input,input_len * sizeof(uint8_t),cudaMemcpyHostToDevice);
 
 
   cudaDeviceSynchronize();
-  window_match <<<BLOCKS,THREADS>>> (gpu_input, input_len, gpu_match);
+  uint64_t blks = min(BLOCKS,MAX_BLOCKS);
+  for(int i=0;i<(MAX_BLOCKS + BLOCKS - 1)/MAX_BLOCKS;i++)
+  {
+    window_match <<<blks,THREADS>>> (gpu_input, input_len, i, gpu_match);
+    cudaDeviceSynchronize();
+  }
 
   cudaDeviceSynchronize();
   matches = (match_expanded_t*) malloc(sizeof(match_expanded_t) * input_len);
