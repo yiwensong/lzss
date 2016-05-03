@@ -1,9 +1,9 @@
 CC = gcc
 NVCC = nvcc
 CFLAGS = --std=gnu99 -Ofast -fgcse-sm -fgcse-las
-CUFLAGS = # -O0 # -arch=sm_35
+CUFLAGS = -O3 # -O0 # -arch=sm_35
 LIBS = -lm
-e = 7
+e = 10
 
 TARGETS = lzss ref lzss-gpu
 OBJECTS = lzss_gpu.ou lzss_gpu_help.ou common.ou lzss.o lzss_help.o common.o ref.o

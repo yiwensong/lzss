@@ -9,7 +9,7 @@
 #include "common.h"
 #include "lzss_help.h"
 
-#define DISP_BITS 11
+#define DISP_BITS 8
 #define LEN_BITS 4
 #define WINDOW ((1<<DISP_BITS))
 #define MAX_MATCH ((1<<LEN_BITS) + 1)
@@ -89,7 +89,7 @@ __global__ void window_match(uint8_t* input, uint64_t length, uint64_t iter, mat
 #define MATCH_BUF_SIZE (MATCH_BUF_MAX + MAX_MATCH)
 #define THREADS (32<<5)
 #define BLOCKS ((input_len + THREADS - 1)/THREADS)
-#define MAX_BLOCKS 65535
+#define MAX_BLOCKS ((1 << 10))
 /* Make sure flags is zeroed out before passed in */
 comp_size_t compress(uint8_t* input, uint64_t input_len, uint8_t* dst, uint8_t* flags)
 {
@@ -99,14 +99,17 @@ comp_size_t compress(uint8_t* input, uint64_t input_len, uint8_t* dst, uint8_t* 
   uint64_t w=0;
   uint64_t b=0;
   uint8_t *curr;
+  comp_size_t sizes;
+  sizes.b = 0;
+  sizes.w = 0;
 
   double time = read_timer();
 
   cudaDeviceSynchronize();
   uint8_t *gpu_input;
   match_expanded_t *gpu_match;
-  if(cudaMalloc(&gpu_input, input_len * sizeof(uint8_t))          != cudaSuccess) { fprintf(stderr,"malloc failed!\n"); }
-  if(cudaMalloc(&gpu_match, input_len * sizeof(match_expanded_t)) != cudaSuccess) { fprintf(stderr,"malloc failed!\n"); }
+  if(cudaMalloc(&gpu_input, input_len * sizeof(uint8_t))          != cudaSuccess) { fprintf(stderr,"malloc failed!\n"); exit(-1); }
+  if(cudaMalloc(&gpu_match, input_len * sizeof(match_expanded_t)) != cudaSuccess) { fprintf(stderr,"malloc failed!\n"); exit(-1); }
   cudaMemcpy(gpu_input,input,input_len * sizeof(uint8_t),cudaMemcpyHostToDevice);
 
 
@@ -124,11 +127,11 @@ comp_size_t compress(uint8_t* input, uint64_t input_len, uint8_t* dst, uint8_t* 
 
   cudaDeviceSynchronize();
 
-  if(t)
-  {
-    fprintf(stderr,"GPU compute time: %lf\n",read_timer() - time);
-    time = read_timer();
-  }
+  // if(t)
+  // {
+  //   fprintf(stderr,"GPU compute time: %lf\n",read_timer() - time);
+  //   time = read_timer();
+  // }
 
   for(;i<input_len;)
   {
@@ -163,15 +166,14 @@ comp_size_t compress(uint8_t* input, uint64_t input_len, uint8_t* dst, uint8_t* 
 
   }
 
-  comp_size_t sizes;
   sizes.b = b;
   sizes.w = w;
 
-  if(t)
-  {
-    fprintf(stderr,"CPU compute time: %lf\n",read_timer() - time);
-    fprintf(stderr,"flag bits: %ld, stuff bytes: %ld\n",b,w);
-  }
+  // if(t)
+  // {
+  //   fprintf(stderr,"CPU compute time: %lf\n",read_timer() - time);
+  //   fprintf(stderr,"flag bits: %ld, stuff bytes: %ld\n",b,w);
+  // }
   return sizes; /* dst length can be calculated from flags and length of flags */
 }
 

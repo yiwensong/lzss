@@ -52,25 +52,20 @@ int main(int argc, char **argv)
   if(compname)
   {
     fsize = file_size(compname);
-    fprintf(stderr,"file size: %ld\n",fsize);
     decomp_t *decomp = (decomp_t*) malloc(fsize*sizeof(uint8_t) + sizeof(decomp_t));
     size_t read = fread(decomp->content, fsize, sizeof(uint8_t),input);
     decomp->content_len = fsize;
-    if(t)
-    {
-      fprintf(stdout,"Read time: %lf\n",(read_timer()-time));
-    }
 
     compressed_t *comp = lzss_compress(decomp);
-    fprintf(stderr,"uncompressed size: %ld\n",comp->file_len);
     uint64_t total_len = comp->content_len + BITS_TO_CHARS(comp->flag_bits);
     size_t wrote = fwrite(comp, sizeof(uint8_t), sizeof(compressed_t) + total_len * sizeof(uint8_t), fsave);
 
     if(t)
     {
-      fprintf(stdout,"Mode: compress\n");
-      fprintf(stdout,"Compression ratio: %lf\n", (1.0*fsize)/(1.0*wrote + 1.0e-7));
-      fprintf(stdout,"Deflation: %.0lf%%\n", (1.0*wrote)/(1.0*fsize + 1.0e-7)*100);
+      // fprintf(stdout,"Compression ratio: %lf\n", (1.0*fsize)/(1.0*wrote + 1.0e-7));
+      // fprintf(stdout,"Deflation: %.0lf%%\n", (1.0*wrote)/(1.0*fsize + 1.0e-7)*100);
+      fprintf(stdout,"%ld, ",(long int) fsize);
+      fprintf(stdout,"%lf, ", (1.0*wrote)/(1.0*fsize + 1.0e-7));
     }
   }
   else
@@ -78,21 +73,18 @@ int main(int argc, char **argv)
     fsize = file_size(dcmpname);
     compressed_t *comp = (compressed_t*) malloc(fsize*sizeof(uint8_t));
     size_t read = fread(comp, fsize, sizeof(uint8_t),input);
-    fprintf(stderr,"Uncompressed size: %ld\n",comp->file_len);
 
     decomp_t *decomp = lzss_decomp(comp);
     uint64_t total_len = decomp->content_len;
     size_t wrote = fwrite(decomp->content, sizeof(uint8_t), total_len * sizeof(uint8_t), fsave);
-    fprintf(stderr,"file size: %ld %ld\n",wrote,total_len);
-
-    if(t) fprintf(stdout,"Mode: decompress\n");
   }
 
   if(t)
   {
     time = read_timer() - time;
-    fprintf(stdout,"Input Size: %ld\n",(long int) fsize);
-    fprintf(stdout,"Time elapsed: %lf\n\n\n",time);
+    // fprintf(stdout,"Input Size: %ld\n",(long int) fsize);
+    fprintf(stdout," %lf, ",time);
+    if(!compname) fprintf(stdout,"\n");
   }
   
   return 0;
