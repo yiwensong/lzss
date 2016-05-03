@@ -52,6 +52,7 @@ int main(int argc, char **argv)
   if(compname)
   {
     fsize = file_size(compname);
+    fprintf(stderr,"file size: %ld\n",fsize);
     decomp_t *decomp = (decomp_t*) malloc(fsize*sizeof(uint8_t) + sizeof(decomp_t));
     size_t read = fread(decomp->content, fsize, sizeof(uint8_t),input);
     decomp->content_len = fsize;
@@ -61,6 +62,7 @@ int main(int argc, char **argv)
     }
 
     compressed_t *comp = lzss_compress(decomp);
+    fprintf(stderr,"uncompressed size: %ld\n",comp->file_len);
     uint64_t total_len = comp->content_len + BITS_TO_CHARS(comp->flag_bits);
     size_t wrote = fwrite(comp, sizeof(uint8_t), sizeof(compressed_t) + total_len * sizeof(uint8_t), fsave);
 
@@ -76,10 +78,12 @@ int main(int argc, char **argv)
     fsize = file_size(dcmpname);
     compressed_t *comp = (compressed_t*) malloc(fsize*sizeof(uint8_t));
     size_t read = fread(comp, fsize, sizeof(uint8_t),input);
+    fprintf(stderr,"Uncompressed size: %ld\n",comp->file_len);
 
     decomp_t *decomp = lzss_decomp(comp);
     uint64_t total_len = decomp->content_len;
     size_t wrote = fwrite(decomp->content, sizeof(uint8_t), total_len * sizeof(uint8_t), fsave);
+    fprintf(stderr,"file size: %ld %ld\n",wrote,total_len);
 
     if(t) fprintf(stdout,"Mode: decompress\n");
   }

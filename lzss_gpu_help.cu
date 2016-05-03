@@ -87,7 +87,7 @@ __global__ void window_match(uint8_t* input, uint64_t length, match_expanded_t* 
 
 #define MATCH_BUF_MAX (2 * WINDOW)
 #define MATCH_BUF_SIZE (MATCH_BUF_MAX + MAX_MATCH)
-#define THREADS (32<<2)
+#define THREADS (32<<5)
 #define BLOCKS ((input_len + THREADS - 1)/THREADS)
 /* Make sure flags is zeroed out before passed in */
 comp_size_t compress(uint8_t* input, uint64_t input_len, uint8_t* dst, uint8_t* flags)
@@ -263,7 +263,7 @@ decomp_t *lzss_decomp(compressed_t *comp)
   }
 
   uint64_t decomp_len = decompress(comp_buf,flag_buf,comp_len,decomp->content);
-  decomp->content_len = decomp_len;
+  decomp->content_len = file_len;
 
   return decomp;
 }

@@ -15,5 +15,5 @@ do
   ./lzss-gpu -t -c examples/$i -o test/COMPG.$i
   ./ref e examples/$i test/ref.$i
   ./lzss-gpu -t -d test/COMPG.$i -o test/DECOMPG.$i
-  diff examples/$i test/DECOMPG.$i
+  diff examples/$i test/DECOMPG.$i 2> test/DIFFG.$i
 done

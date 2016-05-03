@@ -15,5 +15,5 @@ do
   ./lzss -t -c examples/$i -o test/COMP.$i
   ./ref e examples/$i test/ref.$i
   ./lzss -t -d test/COMP.$i -o test/DECOMP.$i
-  diff examples/$i test/DECOMP.$i
+  diff examples/$i test/DECOMP.$i 2> test/DIFF.$i
 done
