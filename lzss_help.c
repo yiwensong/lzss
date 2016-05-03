@@ -89,7 +89,6 @@ comp_size_t compress(uint8_t* input, uint64_t input_len, uint8_t* dst, uint8_t* 
     window_match(curr, window_offset, (uint16_t) input_len-i, &match);
     if( match.l < MIN_MATCH )
     {
-      fprintf(stderr,"i %d: bit is 0 writing %c\n",i,curr[0]);
       /* add 0 bit and the byte */
       for(int j=0;j<max(1,match.l);j++)
       {
@@ -104,7 +103,6 @@ comp_size_t compress(uint8_t* input, uint64_t input_len, uint8_t* dst, uint8_t* 
     {
       /* match.d is displacement */
       /* match.l is length of match */
-      fprintf(stderr,"i %d: bit is 1 matchoff %d matchlen %d\n",i,match.d,match.l);
       IDX_BY_BIT(flags,b) |= PUT_BIT(1,b);
       pack_match(&m,&match);
       memcpy(dst + w,&m,sizeof(match_t));
